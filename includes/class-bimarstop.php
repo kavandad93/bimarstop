@@ -22,6 +22,8 @@ final class Plugin {
         add_action('init', [$this, 'register_roles']);
         add_action('template_redirect', [$this, 'require_login']);
         add_filter('show_admin_bar', [$this, 'show_admin_bar']);
+        add_filter('pre_user_role', [$this, 'force_patient_registration_role'], 10, 2);
+        add_action('admin_menu', [$this, 'restrict_role_admin_menu'], 999);
     }
 
     public static function activate(): void {
@@ -58,6 +60,32 @@ final class Plugin {
 
     public function show_admin_bar($show): bool {
         return is_user_logged_in() ? (bool) $show : false;
+    }
+
+    public function force_patient_registration_role($role, $userdata) {
+        return 'bimarstop_patient';
+    }
+
+    public function restrict_role_admin_menu(): void {
+        if (!is_user_logged_in() || current_user_can('manage_options')) return;
+        $role = $this->current_role();
+        if ($role === 'bimarstop_patient' || $role === 'bimarstop_doctor' || $role === 'bimarstop_operator') {
+            $menus = [
+                'index.php',
+                'about.php',
+                'edit.php',
+                'upload.php',
+                'edit.php?post_type=page',
+                'edit-comments.php',
+                'themes.php',
+                'plugins.php',
+                'users.php',
+                'tools.php',
+                'options-general.php',
+                'profile.php',
+            ];
+            foreach ($menus as $menu) remove_menu_page($menu);
+        }
     }
 
     private function current_role(): string {
