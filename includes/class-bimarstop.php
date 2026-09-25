@@ -20,56 +20,56 @@ final class Plugin {
 
     public static function activate(): void {
         if (get_option('bimarstop_settings', false) === false) {
-            add_option('bimarstop_settings', [
-                'font_enabled' => 1,
-                'font_url' => 'https://cdn.jsdelivr.net/npm/@fontsource/vazirmatn@5.0.18/index.css',
-                'default_theme' => 'light-1',
-                'show_theme_picker' => 1,
-            ]);
+            add_option('bimarstop_settings', ['theme' => 'light-1']);
         }
         flush_rewrite_rules();
     }
 
     public static function deactivate(): void { flush_rewrite_rules(); }
 
-    public function register_settings(): void {
-        register_setting('bimarstop_settings_group', 'bimarstop_settings', [
-            'sanitize_callback' => [$this, 'sanitize_settings'],
-        ]);
-    }
-
-    public function sanitize_settings($input): array {
-        $themes = array_merge(
-            array_map(fn($i) => 'light-' . $i, range(1, 10)),
-            array_map(fn($i) => 'dark-' . $i, range(1, 10))
-        );
-
+    private function themes(): array {
         return [
-            'font_enabled' => empty($input['font_enabled']) ? 0 : 1,
-            'font_url' => !empty($input['font_url']) ? esc_url_raw($input['font_url']) : '',
-            'default_theme' => in_array($input['default_theme'] ?? 'light-1', $themes, true) ? $input['default_theme'] : 'light-1',
-            'show_theme_picker' => empty($input['show_theme_picker']) ? 0 : 1,
+            'light-1' => 'روشن ۱ — وزیرمتن',
+            'light-2' => 'روشن ۲ — کلاسیک',
+            'light-3' => 'روشن ۳ — آبی',
+            'light-4' => 'روشن ۴ — سبز',
+            'light-5' => 'روشن ۵ — صورتی',
+            'light-6' => 'روشن ۶ — گرم',
+            'light-7' => 'روشن ۷ — مینیمال',
+            'light-8' => 'روشن ۸ — بنفش',
+            'light-9' => 'روشن ۹ — دریایی',
+            'light-10' => 'روشن ۱۰ — مدرن',
+            'dark-1' => 'تاریک ۱ — وزیرمتن',
+            'dark-2' => 'تاریک ۲ — زغالی',
+            'dark-3' => 'تاریک ۳ — آبی شب',
+            'dark-4' => 'تاریک ۴ — سبز شب',
+            'dark-5' => 'تاریک ۵ — بنفش',
+            'dark-6' => 'تاریک ۶ — قرمز',
+            'dark-7' => 'تاریک ۷ — طلایی',
+            'dark-8' => 'تاریک ۸ — نیلی',
+            'dark-9' => 'تاریک ۹ — فیروزه‌ای',
+            'dark-10' => 'تاریک ۱۰ — خاکستری',
         ];
     }
 
-    public function enqueue_assets(): void {
-        $settings = wp_parse_args(get_option('bimarstop_settings', []), [
-            'font_enabled' => 1,
-            'font_url' => 'https://cdn.jsdelivr.net/npm/@fontsource/vazirmatn@5.0.18/index.css',
-            'default_theme' => 'light-1',
-            'show_theme_picker' => 1,
+    public function register_settings(): void {
+        register_setting('bimarstop_settings_group', 'bimarstop_settings', [
+            'sanitize_callback' => function ($input) {
+                $theme = sanitize_key($input['theme'] ?? 'light-1');
+                return ['theme' => array_key_exists($theme, $this->themes()) ? $theme : 'light-1'];
+            },
         ]);
+    }
 
-        if (!empty($settings['font_enabled']) && !empty($settings['font_url'])) {
-            wp_enqueue_style('bimarstop-vazirmatn', $settings['font_url'], [], BIMARSTOP_VERSION);
-        }
+    public function enqueue_assets(): void {
+        $settings = wp_parse_args(get_option('bimarstop_settings', []), ['theme' => 'light-1']);
+        $theme = array_key_exists($settings['theme'], $this->themes()) ? $settings['theme'] : 'light-1';
 
-        wp_enqueue_style('bimarstop-style', BIMARSTOP_URL . 'assets/bimarstop.css', ['bimarstop-vazirmatn'], BIMARSTOP_VERSION);
+        wp_enqueue_style('bimarstop-style', BIMARSTOP_URL . 'assets/bimarstop.css', [], BIMARSTOP_VERSION);
         wp_enqueue_script('bimarstop-theme', BIMARSTOP_URL . 'assets/bimarstop.js', [], BIMARSTOP_VERSION, true);
 
         wp_localize_script('bimarstop-theme', 'BimarStopSettings', [
-            'defaultTheme' => $settings['default_theme'],
-            'showPicker' => !empty($settings['show_theme_picker']),
+            'theme' => $theme,
         ]);
     }
 
@@ -88,68 +88,43 @@ final class Plugin {
     public function settings_page(): void {
         if (!current_user_can('manage_options')) return;
 
-        $settings = wp_parse_args(get_option('bimarstop_settings', []), [
-            'font_enabled' => 1,
-            'font_url' => 'https://cdn.jsdelivr.net/npm/@fontsource/vazirmatn@5.0.18/index.css',
-            'default_theme' => 'light-1',
-            'show_theme_picker' => 1,
-        ]);
-
-        $themes = [];
-        foreach (range(1, 10) as $i) $themes['light-' . $i] = 'روشن ' . $i;
-        foreach (range(1, 10) as $i) $themes['dark-' . $i] = 'تاریک ' . $i;
+        $settings = wp_parse_args(get_option('bimarstop_settings', []), ['theme' => 'light-1']);
+        $themes = $this->themes();
         ?>
         <div class="wrap" dir="rtl">
             <h1>BimarStop</h1>
-            <p>تنظیمات اصلی ظاهر و تم سایت.</p>
+            <p>تنظیمات ظاهری سایت BimarStop</p>
 
             <form method="post" action="options.php">
                 <?php settings_fields('bimarstop_settings_group'); ?>
 
                 <div class="card" style="max-width:900px;padding:24px">
-                    <h2>فونت سایت</h2>
-                    <label>
-                        <input type="checkbox" name="bimarstop_settings[font_enabled]" value="1" <?php checked($settings['font_enabled'], 1); ?>>
-                        فعال بودن فونت وزیرمتن برای کل سایت
-                    </label>
+                    <h2>🎨 تم سایت</h2>
+                    <p>تم سایت فقط توسط مدیر تعیین می‌شود و برای تمام بازدیدکنندگان یکسان خواهد بود.</p>
 
-                    <p>
-                        <label for="bimarstop-font-url"><strong>آدرس فایل فونت / CSS</strong></label><br>
-                        <input id="bimarstop-font-url" type="url" class="regular-text" style="width:100%;max-width:700px"
-                               name="bimarstop_settings[font_url]"
-                               value="<?php echo esc_attr($settings['font_url']); ?>">
-                    </p>
+                    <select name="bimarstop_settings[theme]" style="min-width:320px">
+                        <?php foreach ($themes as $value => $label): ?>
+                            <option value="<?php echo esc_attr($value); ?>" <?php selected($settings['theme'], $value); ?>>
+                                <?php echo esc_html($label); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+
+                    <p><strong>۲۰ تم مستقل:</strong> ۱۰ روشن و ۱۰ تاریک.</p>
+                    <p>فقط تم‌های روشن ۱ و تاریک ۱ از فونت وزیرمتن استفاده می‌کنند؛ سایر تم‌ها فونت و ظاهر اختصاصی خودشان را دارند.</p>
                 </div>
 
-                <div class="card" style="max-width:900px;padding:24px">
-                    <h2>تم سایت</h2>
-                    <p>
-                        <label for="bimarstop-default-theme"><strong>تم پیش‌فرض</strong></label><br>
-                        <select id="bimarstop-default-theme" name="bimarstop_settings[default_theme]">
-                            <?php foreach ($themes as $value => $label): ?>
-                                <option value="<?php echo esc_attr($value); ?>" <?php selected($settings['default_theme'], $value); ?>>
-                                    <?php echo esc_html($label); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </p>
-
-                    <label>
-                        <input type="checkbox" name="bimarstop_settings[show_theme_picker]" value="1" <?php checked($settings['show_theme_picker'], 1); ?>>
-                        نمایش انتخابگر تم برای کاربران
-                    </label>
-
-                    <p>۲۰ تم آماده وجود دارد: ۱۰ روشن و ۱۰ تاریک.</p>
-                </div>
-
-                <?php submit_button('ذخیره تنظیمات BimarStop'); ?>
+                <?php submit_button('ذخیره تم سایت'); ?>
             </form>
         </div>
         <?php
     }
 
     public function body_class(array $classes): array {
+        $settings = wp_parse_args(get_option('bimarstop_settings', []), ['theme' => 'light-1']);
+        $theme = array_key_exists($settings['theme'], $this->themes()) ? $settings['theme'] : 'light-1';
         $classes[] = 'bimarstop-site';
+        $classes[] = 'bimarstop-' . $theme;
         return $classes;
     }
 }
