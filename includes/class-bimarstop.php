@@ -218,6 +218,7 @@ final class Plugin {
             add_submenu_page('bimarstop', 'صف ورودی', 'صف ورودی', 'read', 'bimarstop-queue', [$this, 'operator_chat_queue']);
             add_submenu_page('bimarstop', 'بیماران', 'بیماران', 'read', 'bimarstop-patients', [$this, 'patients_page']);
             add_submenu_page('bimarstop', 'پیام‌ها', 'پیام‌ها', 'read', 'bimarstop-messages', [$this, 'operator_chat_queue']);
+            add_submenu_page('bimarstop', 'چت با مریض', 'چت با مریض', 'read', 'bimarstop-chat', [$this, 'operator_chat_page']);
             add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'role_placeholder']);
             add_submenu_page('bimarstop', 'اعلان‌ها', 'اعلان‌ها', 'read', 'bimarstop-notifications', [$this, 'role_placeholder']);
             add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'role_placeholder']);
@@ -276,13 +277,30 @@ final class Plugin {
 
     private function users_table(string $role, string $title): void {
         if (!current_user_can('manage_options')) return;
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bimarstop_create_user']) && check_admin_referer('bimarstop_create_user')) {
+            $login = sanitize_user(wp_unslash($_POST['user_login'] ?? ''));
+            $email = sanitize_email(wp_unslash($_POST['user_email'] ?? ''));
+            $pass = (string) ($_POST['user_pass'] ?? '');
+            $name = sanitize_text_field(wp_unslash($_POST['display_name'] ?? ''));
+            if ($login && $email && strlen($pass) >= 8 && !username_exists($login) && !email_exists($email)) {
+                $id = wp_create_user($login, $pass, $email);
+                if (!is_wp_error($id)) {
+                    wp_update_user(['ID'=>$id,'display_name'=>$name,'role'=>$role]);
+                    echo '<div class="notice notice-success"><p>کاربر ساخته شد.</p></div>';
+                }
+            } else {
+                echo '<div class="notice notice-error"><p>نام کاربری/ایمیل تکراری است یا رمز عبور کمتر از ۸ کاراکتر است.</p></div>';
+            }
+        }
         $users = $this->users_by_role($role);
         echo '<div class="wrap" dir="rtl"><h1>' . esc_html($title) . '</h1>';
-        echo '<p>ساخت کاربر با این نقش از همین بخش انجام می‌شود.</p>';
+        echo '<h2>ساخت کاربر</h2><form method="post"><input type="hidden" name="bimarstop_create_user" value="1">';
+        wp_nonce_field('bimarstop_create_user');
+        echo '<p><input required name="user_login" placeholder="نام کاربری"></p><p><input required type="email" name="user_email" placeholder="ایمیل"></p><p><input required type="password" name="user_pass" minlength="8" placeholder="رمز عبور"></p><p><input name="display_name" placeholder="نام نمایشی"></p>';
+        submit_button('ساخت کاربر');
+        echo '</form><h2>فهرست</h2>';
         echo '<table class="widefat striped"><thead><tr><th>نام کاربری</th><th>نام</th><th>ایمیل</th><th>تاریخ عضویت</th></tr></thead><tbody>';
-        foreach ($users as $u) {
-            echo '<tr><td>' . esc_html($u->user_login) . '</td><td>' . esc_html($u->display_name) . '</td><td>' . esc_html($u->user_email) . '</td><td>' . esc_html($u->user_registered) . '</td></tr>';
-        }
+        foreach ($users as $u) echo '<tr><td>'.esc_html($u->user_login).'</td><td>'.esc_html($u->display_name).'</td><td>'.esc_html($u->user_email).'</td><td>'.esc_html($u->user_registered).'</td></tr>';
         if (!$users) echo '<tr><td colspan="4">هنوز کاربری وجود ندارد.</td></tr>';
         echo '</tbody></table></div>';
     }
@@ -305,12 +323,28 @@ final class Plugin {
         $this->chat_script();
     }
 
+    public function operator_chat_page(): void {
+        if ($this->current_role() !== 'bimarstop_operator' && !current_user_can('manage_options')) return;
+        global $wpdb;
+        $tid = absint($_GET['thread'] ?? 0);
+        if ($tid && $this->current_role() === 'bimarstop_operator') {
+            $wpdb->update($wpdb->prefix.'bimarstop_chat_threads',['operator_id'=>get_current_user_id(),'updated_at'=>current_time('mysql')],['id'=>$tid],['%d','%s'],['%d']);
+        }
+        $thread = $tid ? $wpdb->get_row($wpdb->prepare("SELECT t.*,u.display_name FROM {$wpdb->prefix}bimarstop_chat_threads t JOIN {$wpdb->users} u ON u.ID=t.patient_id WHERE t.id=%d",$tid)) : null;
+        echo '<div class="wrap" dir="rtl"><h1>💬 چت با مریض</h1>';
+        if (!$thread) { echo '<p>یک گفتگو را از «صف چت» انتخاب کنید.</p></div>'; return; }
+        echo '<h2>مریض: '.esc_html($thread->display_name).'</h2>';
+        echo '<div id="bimarstop-chat-box" style="background:#fff;border:1px solid #ccd0d4;padding:16px;max-width:800px;min-height:300px;overflow:auto"></div>';
+        echo '<p><textarea id="bimarstop-chat-input" rows="3" style="width:100%;max-width:800px"></textarea></p><button class="button button-primary" id="bimarstop-send">ارسال پیام</button></div>';
+        $this->chat_script();
+    }
+
     public function operator_chat_queue(): void {
         if (!current_user_can('read')) return;
         global $wpdb;
         $threads=$wpdb->get_results("SELECT t.*, u.display_name FROM {$wpdb->prefix}bimarstop_chat_threads t LEFT JOIN {$wpdb->users} u ON u.ID=t.patient_id WHERE t.status='open' ORDER BY t.updated_at DESC");
-        echo '<div class="wrap" dir="rtl"><h1>💬 صف چت</h1><table class="widefat striped"><thead><tr><th>مریض</th><th>وضعیت</th><th>آخرین بروزرسانی</th></tr></thead><tbody>';
-        foreach($threads as $t) echo '<tr><td>'.esc_html($t->display_name).'</td><td>'.($t->operator_id?'در حال پاسخ':'منتظر اوپراتور').'</td><td>'.esc_html($t->updated_at).'</td></tr>';
+        echo '<div class="wrap" dir="rtl"><h1>💬 صف چت</h1><table class="widefat striped"><thead><tr><th>مریض</th><th>وضعیت</th><th>آخرین بروزرسانی</th><th>عملیات</th></tr></thead><tbody>';
+        foreach($threads as $t) echo '<tr><td>'.esc_html($t->display_name).'</td><td>'.($t->operator_id?'در حال پاسخ':'منتظر اوپراتور').'</td><td>'.esc_html($t->updated_at).'</td><td><a class="button" href="'.esc_url(admin_url('admin.php?page=bimarstop-chat&thread='.(int)$t->id)).'">باز کردن چت</a></td></tr>';
         if(!$threads) echo '<tr><td colspan="3">چتی در صف نیست.</td></tr>';
         echo '</tbody></table></div>';
     }
