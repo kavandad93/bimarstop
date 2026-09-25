@@ -241,6 +241,12 @@ final class Plugin {
         if(!empty($uploads['error']) || empty($uploads['basedir']) || !is_dir($uploads['basedir'])) return;
         $allowed=['pdf'=>'application/pdf','jpg'=>'image/jpeg','jpeg'=>'image/jpeg','png'=>'image/png','webp'=>'image/webp','doc'=>'application/msword','docx'=>'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
         $table=$wpdb->prefix.'bimarstop_documents';
+        $cat_table=$wpdb->prefix.'bimarstop_document_categories';
+        $default_category=(int)$wpdb->get_var("SELECT id FROM $cat_table ORDER BY id ASC LIMIT 1");
+        if(!$default_category){
+            $wpdb->insert($cat_table,['name'=>'عمومی','created_at'=>current_time('mysql')],['%s','%s']);
+            $default_category=(int)$wpdb->insert_id;
+        }
         try { $it=new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($uploads['basedir'], \FilesystemIterator::SKIP_DOTS)); } catch(Throwable $e){ return; }
         foreach($it as $file){
             if(!$file->isFile()) continue;
@@ -250,7 +256,11 @@ final class Plugin {
             $real=realpath($path); $base=realpath($uploads['basedir']);
             if(!$real||!$base||strpos($real,$base)!==0) continue;
             $exists=$wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE path=%s",$real));
-            if(!$exists) $wpdb->insert($table,['path'=>$real,'name'=>basename($real),'size'=>(int)$file->getSize(),'type'=>$allowed[$ext],'created_at'=>current_time('mysql'),'updated_at'=>current_time('mysql')],['%s','%s','%d','%s','%s','%s']);
+            if(!$exists) {
+                $wpdb->insert($table,['category_id'=>$default_category,'path'=>$real,'name'=>basename($real),'size'=>(int)$file->getSize(),'type'=>$allowed[$ext],'created_at'=>current_time('mysql'),'updated_at'=>current_time('mysql')],['%d','%s','%s','%d','%s','%s','%s']);
+            } elseif((int)$wpdb->get_var($wpdb->prepare("SELECT category_id FROM $table WHERE id=%d",$exists))===0) {
+                $wpdb->update($table,['category_id'=>$default_category,'updated_at'=>current_time('mysql')],['id'=>(int)$exists],['%d','%s'],['%d']);
+            }
         }
     }
 
