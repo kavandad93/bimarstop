@@ -220,6 +220,9 @@ final class Plugin {
     }
 
     public function admin_assets(): void {
+        if (isset($_GET['page']) && in_array(sanitize_key($_GET['page']), ['bimarstop-chat','bimarstop-doctor-chats','bimarstop-private-chats'], true)) {
+            wp_enqueue_style('bimarstop-chat-ui', BIMARSTOP_URL . 'assets/bimarstop-chat.css', [], BIMARSTOP_VERSION);
+        }
         wp_enqueue_style(
             'bimarstop-admin-font',
             'https://cdn.jsdelivr.net/npm/@fontsource/vazirmatn@5.0.18/index.css',
@@ -551,30 +554,19 @@ final class Plugin {
 
     private function render_private_chat(int $partner_id, string $back_page): void {
         if (!is_user_logged_in()) return;
-        $uid = get_current_user_id();
-        if (!$this->private_partner_allowed($uid, $partner_id)) {
-            echo '<div class="wrap" dir="rtl"><div class="notice notice-error"><p>دسترسی به این گفت‌وگو مجاز نیست.</p></div></div>';
-            return;
-        }
-        $partner = get_userdata($partner_id);
-        $thread = $this->get_or_create_private_thread($uid, $partner_id);
-        if (!$thread) { echo '<div class="wrap" dir="rtl"><p>خطا در ساخت گفتگو.</p></div>'; return; }
-        echo '<div class="wrap" dir="rtl"><p><a href="' . esc_url(admin_url('admin.php?page=' . $back_page)) . '">← بازگشت</a></p>';
-        echo '<h1>💬 گفتگوی خصوصی با ' . esc_html($partner->display_name ?: $partner->user_login) . '</h1>';
-        if (($partner->roles[0] ?? '') === 'bimarstop_operator') {
-            $online = get_user_meta($partner_id, 'bimarstop_operator_online', true);
-            echo '<p>وضعیت اوپراتور: <strong>' . ($online === '1' ? 'آنلاین 🟢' : 'آفلاین ⚪') . '</strong></p>';
-        }
-        echo '<div id="bimarstop-private-box" style="background:#fff;border:1px solid #ccd0d4;padding:16px;max-width:800px;min-height:300px;overflow:auto"></div>';
-        echo '<p><textarea id="bimarstop-private-input" rows="3" style="width:100%;max-width:800px" placeholder="پیام خود را بنویسید..."></textarea></p>';
-        echo '<button class="button button-primary" id="bimarstop-private-send">ارسال پیام</button></div>';
-        $nonce = wp_create_nonce('bimarstop_private_chat');
-        $ajax = admin_url('admin-ajax.php');
-        echo '<script>(function(){var box=document.getElementById("bimarstop-private-box"),input=document.getElementById("bimarstop-private-input"),send=document.getElementById("bimarstop-private-send"),last=0;
-        function load(){var f=new FormData();f.append("action","bimarstop_private_get_messages");f.append("nonce","'.esc_js($nonce).'");f.append("thread_id","'.(int)$thread->id.'");f.append("last_id",last);
-        fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(x=>{if(!x.success)return;x.data.messages.forEach(function(m){var p=document.createElement("p");var s=document.createElement("strong");s.textContent=m.sender;p.appendChild(s);p.appendChild(document.createTextNode(": "+m.message));box.appendChild(p);last=Math.max(last,parseInt(m.id));box.scrollTop=box.scrollHeight;});});}
-        send.onclick=function(){var value=input.value.trim();if(!value)return;var f=new FormData();f.append("action","bimarstop_private_send_message");f.append("nonce","'.esc_js($nonce).'");f.append("thread_id","'.(int)$thread->id.'");f.append("message",value);
-        send.disabled=true;fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(function(x){if(x.success)input.value="";send.disabled=false;load();});};load();setInterval(load,4000);})();</script>';
+        $uid=get_current_user_id();
+        if(!$this->private_partner_allowed($uid,$partner_id)){echo '<div class="wrap" dir="rtl"><div class="notice notice-error"><p>دسترسی به این گفت‌وگو مجاز نیست.</p></div></div>';return;}
+        $partner=get_userdata($partner_id);$thread=$this->get_or_create_private_thread($uid,$partner_id);
+        if(!$thread){echo '<div class="wrap" dir="rtl"><p>خطا در ساخت گفتگو.</p></div>';return;}
+        echo '<div class="bimar-chat-page" dir="rtl"><div class="bimar-chat-header"><div><span class="bimar-chat-kicker">BimarStop • ارتباط داخلی</span><h1>💬 گفتگوی خصوصی</h1><p>با '.esc_html($partner->display_name?:$partner->user_login).'</p></div><a class="bimar-chat-back" href="'.esc_url(admin_url('admin.php?page='.$back_page)).'">← بازگشت</a></div>';
+        echo '<div class="bimar-chat-shell"><aside class="bimar-chat-side"><div class="bimar-chat-side-title">گفتگوی داخلی</div><div class="bimar-chat-tab active">💬 '.esc_html($partner->display_name?:$partner->user_login).'</div><div class="bimar-chat-side-info">🔒 گفتگوی خصوصی پزشک و اوپراتور<br><span>فایل‌های PDF، JPG، PNG و DOCX تا ۱۰ مگابایت.</span></div></aside><main class="bimar-chat-main"><div id="bimarstop-private-box" class="bimar-chat-box"></div><div id="bimar-private-attachment" class="bimar-chat-attachment" hidden><span>📎 <b id="bimar-private-file-name"></b></span><button type="button" id="bimar-private-file-remove">×</button></div><div class="bimar-chat-composer"><label class="bimar-attach"><input id="bimarstop-private-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden>📎</label><textarea id="bimarstop-private-input" rows="1" placeholder="پیام خود را بنویسید..."></textarea><button id="bimarstop-private-send" class="bimar-send">➤</button><div class="bimar-chat-hint">Enter برای ارسال • Shift+Enter برای خط جدید</div></div></main></div></div>';
+        $nonce=wp_create_nonce('bimarstop_private_chat');$ajax=admin_url('admin-ajax.php');
+        echo '<script>(function(){var box=document.getElementById("bimarstop-private-box"),input=document.getElementById("bimarstop-private-input"),send=document.getElementById("bimarstop-private-send"),file=document.getElementById("bimarstop-private-file"),att=document.getElementById("bimar-private-attachment"),fn=document.getElementById("bimar-private-file-name"),rm=document.getElementById("bimar-private-file-remove"),last=0;
+        function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML;}function render(m){var row=document.createElement("div");row.className="bimar-msg "+(m.mine?"mine":"theirs");var b=document.createElement("div");b.className="bimar-msg-bubble";var s=document.createElement("div");s.className="bimar-msg-sender";s.textContent=m.sender;b.appendChild(s);if(m.message){var x=document.createElement("div");x.className="bimar-msg-text";x.textContent=m.message;b.appendChild(x);}if(m.attachment){var a=document.createElement("a");a.className="bimar-file-card";a.href=m.attachment.url;a.innerHTML="<span class=\"bimar-file-icon\">📎</span><span><b>"+esc(m.attachment.name)+"</b><small>"+esc(m.attachment.size)+"</small></span><strong>دانلود</strong>";b.appendChild(a);}var tm=document.createElement("div");tm.className="bimar-msg-time";tm.textContent=m.time||"";b.appendChild(tm);row.appendChild(b);box.appendChild(row);}
+        function load(){var f=new FormData();f.append("action","bimarstop_private_get_messages");f.append("nonce","'+esc_js($nonce)+'");f.append("thread_id","'.(int)$thread->id.'");f.append("last_id",last);fetch("'+esc_url($ajax)+'",{method:"POST",body:f}).then(r=>r.json()).then(x=>{if(!x.success)return;x.data.messages.forEach(function(m){render(m);last=Math.max(last,parseInt(m.id));});if(x.data.messages.length)box.scrollTop=box.scrollHeight;});}
+        function clearFile(){file.value="";att.hidden=true;fn.textContent="";}file.addEventListener("change",function(){if(this.files[0]){fn.textContent=this.files[0].name;att.hidden=false;}});rm.onclick=clearFile;
+        function sendMsg(){var v=input.value.trim();if(!v&&!file.files.length)return;var f=new FormData();f.append("action","bimarstop_private_send_message");f.append("nonce","'+esc_js($nonce)+'");f.append("thread_id","'.(int)$thread->id.'");f.append("message",v);if(file.files[0])f.append("chat_file",file.files[0]);send.disabled=true;fetch("'+esc_url($ajax)+'",{method:"POST",body:f}).then(r=>r.json()).then(function(x){send.disabled=false;if(x.success){input.value="";clearFile();load();}else alert((x.data&&x.data.message)?x.data.message:"ارسال ناموفق بود.");});}
+        send.onclick=sendMsg;input.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg();}});load();setInterval(load,4000);})();</script>';
     }
 
     public function operator_private_chats_page(): void {
