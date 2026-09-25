@@ -879,15 +879,107 @@ final class Plugin {
     }
 
     public function ajax_share_document(): void {
-        if(!current_user_can('manage_options') && !in_array($this->current_role(),['bimarstop_operator','bimarstop_doctor'],true)) wp_send_json_error();
+        if($this->current_role()!=='bimarstop_operator') wp_send_json_error(['message'=>'فقط اوپراتور می‌تواند مدرک ارسال کند.']);
         check_ajax_referer('bimarstop_chat','nonce');
         global $wpdb;
-        $did=absint($_POST['document_id']??0);$rid=absint($_POST['recipient_id']??0);$note=sanitize_textarea_field(wp_unslash($_POST['note']??''));
-        $doc=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_documents WHERE id=%d",$did));
+
+        $did=absint($_POST['document_id']??0);
+        $rid=absint($_POST['recipient_id']??0);
+        $note=sanitize_textarea_field(wp_unslash($_POST['note']??''));
+        $uid=get_current_user_id();
+
+        $doc=$wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$wpdb->prefix}bimarstop_documents WHERE id=%d",
+            $did
+        ));
         $recipient=get_userdata($rid);
-        if(!$doc||!$recipient||!in_array('bimarstop_doctor',$recipient->roles,true)&&!in_array('bimarstop_patient',$recipient->roles,true))wp_send_json_error(['message'=>'گیرنده معتبر نیست.']);
-        $wpdb->insert($wpdb->prefix.'bimarstop_document_shares',['document_id'=>$did,'sender_id'=>get_current_user_id(),'recipient_id'=>$rid,'note'=>$note,'status'=>'sent','created_at'=>current_time('mysql')],['%d','%d','%d','%s','%s','%s']);
-        wp_send_json_success(['share_id'=>$wpdb->insert_id]);
+
+        if(!$doc || !$recipient || (!in_array('bimarstop_doctor',$recipient->roles,true) && !in_array('bimarstop_patient',$recipient->roles,true))){
+            wp_send_json_error(['message'=>'گیرنده معتبر نیست.']);
+        }
+
+        $uploads=wp_upload_dir();
+        $real=realpath($doc->path);
+        $base=!empty($uploads['basedir'])?realpath($uploads['basedir']):false;
+        if(!$real || !$base || strpos($real,$base)!==0 || !is_file($real)){
+            wp_send_json_error(['message'=>'فایل مدرک پیدا نشد.']);
+        }
+
+        $message_text=$note;
+        $now=current_time('mysql');
+
+        // بیمار: مدرک دقیقاً داخل همان چت بیمار ↔ اوپراتور ارسال می‌شود.
+        if(in_array('bimarstop_patient',$recipient->roles,true)){
+            $threads=$wpdb->prefix.'bimarstop_chat_threads';
+            $thread=$wpdb->get_row($wpdb->prepare(
+                "SELECT * FROM $threads WHERE patient_id=%d AND operator_id=%d AND status='open' ORDER BY updated_at DESC LIMIT 1",
+                $rid,$uid
+            ));
+
+            if(!$thread){
+                $wpdb->insert($threads,[
+                    'patient_id'=>$rid,
+                    'operator_id'=>$uid,
+                    'status'=>'open',
+                    'created_at'=>$now,
+                    'updated_at'=>$now
+                ],['%d','%d','%s','%s','%s']);
+                $thread=$wpdb->insert_id ? $wpdb->get_row($wpdb->prepare("SELECT * FROM $threads WHERE id=%d",$wpdb->insert_id)) : null;
+            }
+
+            if(!$thread) wp_send_json_error(['message'=>'گفتگوی بیمار پیدا یا ایجاد نشد.']);
+
+            $ok=$wpdb->insert($wpdb->prefix.'bimarstop_chat_messages',[
+                'thread_id'=>(int)$thread->id,
+                'sender_id'=>$uid,
+                'message'=>$message_text,
+                'attachment_path'=>$real,
+                'attachment_name'=>$doc->name,
+                'attachment_size'=>(int)$doc->size,
+                'attachment_type'=>$doc->type,
+                'created_at'=>$now
+            ],['%d','%d','%s','%s','%s','%d','%s','%s']);
+
+            if(!$ok) wp_send_json_error(['message'=>'ارسال مدرک به چت بیمار ناموفق بود.']);
+            $wpdb->update($threads,['updated_at'=>$now],['id'=>(int)$thread->id],['%s'],['%d']);
+
+            $chat_message_id=(int)$wpdb->insert_id;
+        } else {
+            // پزشک: مدرک دقیقاً داخل همان چت خصوصی پزشک ↔ اوپراتور ارسال می‌شود.
+            $thread=$this->get_or_create_private_thread($uid,$rid);
+            if(!$thread) wp_send_json_error(['message'=>'گفتگوی پزشک پیدا یا ایجاد نشد.']);
+
+            $ok=$wpdb->insert($wpdb->prefix.'bimarstop_private_messages',[
+                'thread_id'=>(int)$thread->id,
+                'sender_id'=>$uid,
+                'message'=>$message_text,
+                'attachment_path'=>$real,
+                'attachment_name'=>$doc->name,
+                'attachment_size'=>(int)$doc->size,
+                'attachment_type'=>$doc->type,
+                'created_at'=>$now
+            ],['%d','%d','%s','%s','%s','%d','%s','%s']);
+
+            if(!$ok) wp_send_json_error(['message'=>'ارسال مدرک به چت پزشک ناموفق بود.']);
+            $wpdb->update($wpdb->prefix.'bimarstop_private_threads',['updated_at'=>$now],['id'=>(int)$thread->id],['%s'],['%d']);
+
+            $chat_message_id=(int)$wpdb->insert_id;
+        }
+
+        // نگه‌داشتن سابقه ارسال مدرک نیز انجام می‌شود.
+        $wpdb->insert($wpdb->prefix.'bimarstop_document_shares',[
+            'document_id'=>$did,
+            'sender_id'=>$uid,
+            'recipient_id'=>$rid,
+            'note'=>$note,
+            'status'=>'sent',
+            'created_at'=>$now
+        ],['%d','%d','%d','%s','%s','%s']);
+
+        wp_send_json_success([
+            'share_id'=>(int)$wpdb->insert_id,
+            'chat_message_id'=>$chat_message_id
+        ]);
     }
 
     public function role_dashboard(): void { if (!current_user_can('read')) return; echo '<div class="wrap" dir="rtl"><h1>🏥 BimarStop</h1><p>داشبورد اختصاصی شما.</p></div>'; }
