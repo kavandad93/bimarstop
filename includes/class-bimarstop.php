@@ -19,9 +19,13 @@ final class Plugin {
         add_action('wp_dashboard_setup', [$this, 'dashboard_widgets'], 20);
         add_action('wp_dashboard_setup', [$this, 'dashboard_setup'], 100);
         add_action('admin_enqueue_scripts', [$this, 'admin_assets']);
+        add_action('init', [$this, 'register_roles']);
+        add_action('template_redirect', [$this, 'require_login']);
+        add_filter('show_admin_bar', [$this, 'show_admin_bar']);
     }
 
     public static function activate(): void {
+        self::register_bimarstop_roles();
         if (get_option('bimarstop_settings', false) === false) {
             add_option('bimarstop_settings', ['theme' => 'light-1']);
         }
@@ -29,6 +33,37 @@ final class Plugin {
     }
 
     public static function deactivate(): void { flush_rewrite_rules(); }
+
+    public function register_roles(): void { self::register_bimarstop_roles(); }
+
+    private static function register_bimarstop_roles(): void {
+        $patient = get_role('bimarstop_patient');
+        if (!$patient) add_role('bimarstop_patient', 'مریض', ['read' => true]);
+        $doctor = get_role('bimarstop_doctor');
+        if (!$doctor) add_role('bimarstop_doctor', 'پزشک', ['read' => true]);
+        $operator = get_role('bimarstop_operator');
+        if (!$operator) add_role('bimarstop_operator', 'اوپراتور', ['read' => true]);
+        $admin = get_role('administrator');
+        if ($admin) {
+            // ادمین اصلی همان نقش استاندارد Administrator وردپرس است.
+        }
+    }
+
+    public function require_login(): void {
+        if (is_user_logged_in() || is_admin() || wp_doing_ajax() || (defined('REST_REQUEST') && REST_REQUEST)) return;
+        $login_url = function_exists('wp_login_url') ? wp_login_url(home_url('/')) : wp_login_url();
+        wp_safe_redirect($login_url);
+        exit;
+    }
+
+    public function show_admin_bar($show): bool {
+        return is_user_logged_in() ? (bool) $show : false;
+    }
+
+    private function current_role(): string {
+        $user = wp_get_current_user();
+        return $user && !empty($user->roles) ? (string) $user->roles[0] : '';
+    }
 
     private function themes(): array {
         return [
@@ -94,6 +129,36 @@ final class Plugin {
     }
 
     public function admin_menu(): void {
+        $role = $this->current_role();
+        if ($role === 'bimarstop_patient') {
+            add_menu_page('BimarStop', 'BimarStop', 'read', 'bimarstop', [$this, 'role_dashboard'], 'dashicons-heart', 25);
+            add_submenu_page('bimarstop', 'داشبورد', 'داشبورد', 'read', 'bimarstop', [$this, 'role_dashboard']);
+            add_submenu_page('bimarstop', 'پیام‌ها', 'پیام‌ها', 'read', 'bimarstop-messages', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'role_placeholder']);
+            return;
+        }
+        if ($role === 'bimarstop_doctor') {
+            add_menu_page('BimarStop', 'BimarStop', 'read', 'bimarstop', [$this, 'role_dashboard'], 'dashicons-heart', 25);
+            add_submenu_page('bimarstop', 'داشبورد', 'داشبورد', 'read', 'bimarstop', [$this, 'role_dashboard']);
+            add_submenu_page('bimarstop', 'پرونده‌ها و اتاق‌ها', 'پرونده‌ها و اتاق‌ها', 'read', 'bimarstop-rooms', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'پیام‌ها', 'پیام‌ها', 'read', 'bimarstop-messages', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'تماس‌ها', 'تماس‌ها', 'read', 'bimarstop-calls', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'role_placeholder']);
+            return;
+        }
+        if ($role === 'bimarstop_operator') {
+            add_menu_page('BimarStop', 'BimarStop', 'read', 'bimarstop', [$this, 'role_dashboard'], 'dashicons-heart', 25);
+            add_submenu_page('bimarstop', 'داشبورد', 'داشبورد', 'read', 'bimarstop', [$this, 'role_dashboard']);
+            add_submenu_page('bimarstop', 'صف ورودی', 'صف ورودی', 'read', 'bimarstop-queue', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'بیماران', 'بیماران', 'read', 'bimarstop-patients', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'پرونده‌ها و اتاق‌ها', 'پرونده‌ها و اتاق‌ها', 'read', 'bimarstop-rooms', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'پیام‌ها', 'پیام‌ها', 'read', 'bimarstop-messages', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'اعلان‌ها', 'اعلان‌ها', 'read', 'bimarstop-notifications', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'role_placeholder']);
+            return;
+        }
         add_menu_page(
             'BimarStop',
             'BimarStop',
@@ -230,6 +295,10 @@ final class Plugin {
             [$this, 'placeholder_page']
         );
     }
+
+    public function role_dashboard(): void { if (!current_user_can('read')) return; echo '<div class="wrap" dir="rtl"><h1>🏥 BimarStop</h1><p>داشبورد اختصاصی شما.</p></div>'; }
+
+    public function role_placeholder(): void { if (!current_user_can('read')) return; echo '<div class="wrap" dir="rtl"><h1>BimarStop</h1><p>این بخش در حال توسعه است.</p></div>'; }
 
     public function placeholder_page(): void {
         if (!current_user_can('manage_options')) return;
