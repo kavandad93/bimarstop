@@ -16,6 +16,8 @@ final class Plugin {
         add_filter('body_class', [$this, 'body_class']);
         add_action('admin_menu', [$this, 'admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
+        add_action('wp_dashboard_setup', [$this, 'dashboard_widgets'], 20);
+        add_action('wp_dashboard_setup', [$this, 'dashboard_setup'], 100);
         add_action('admin_enqueue_scripts', [$this, 'admin_assets']);
     }
 
@@ -232,6 +234,62 @@ final class Plugin {
     public function placeholder_page(): void {
         if (!current_user_can('manage_options')) return;
         echo '<div class="wrap" dir="rtl"><h1>BimarStop</h1><p>این بخش در حال توسعه است.</p></div>';
+    }
+
+    public function dashboard_widgets(): void {
+        wp_add_dashboard_widget('bimarstop_overview', '🏥 BimarStop — نمای کلی', [$this, 'widget_overview']);
+        wp_add_dashboard_widget('bimarstop_queue', '📥 BimarStop — صف ورودی', [$this, 'widget_queue']);
+        wp_add_dashboard_widget('bimarstop_activity', '📋 BimarStop — فعالیت اخیر', [$this, 'widget_activity']);
+        wp_add_dashboard_widget('bimarstop_alerts', '🔔 BimarStop — اعلان‌ها', [$this, 'widget_alerts']);
+    }
+
+    public function widget_overview(): void {
+        echo '<p>ویجت نمای کلی BimarStop.</p>';
+        echo '<p><strong>بیماران:</strong> — &nbsp; <strong>پزشکان:</strong> — &nbsp; <strong>اتاق‌های فعال:</strong> —</p>';
+    }
+
+    public function widget_queue(): void {
+        echo '<p>در این بخش صف ورودی و موارد نیازمند بررسی نمایش داده می‌شود.</p>';
+    }
+
+    public function widget_activity(): void {
+        echo '<p>فعالیت‌های اخیر BimarStop در اینجا نمایش داده می‌شود.</p>';
+    }
+
+    public function widget_alerts(): void {
+        echo '<p>اعلان‌های مهم BimarStop در اینجا نمایش داده می‌شوند.</p>';
+    }
+
+    public function dashboard_setup(): void {
+        if (!current_user_can('manage_options')) return;
+        global $wp_meta_boxes;
+        if (!isset($wp_meta_boxes['dashboard']['normal']['core'])) return;
+        foreach ($wp_meta_boxes['dashboard']['normal']['core'] as $id => $box) {
+            if (strpos($id, 'bimarstop_') !== 0) {
+                unset($wp_meta_boxes['dashboard']['normal']['core'][$id]);
+            }
+        }
+        if (isset($wp_meta_boxes['dashboard']['side']['core'])) {
+            foreach ($wp_meta_boxes['dashboard']['side']['core'] as $id => $box) {
+                if (strpos($id, 'bimarstop_') !== 0) {
+                    unset($wp_meta_boxes['dashboard']['side']['core'][$id]);
+                }
+            }
+        }
+        if (isset($wp_meta_boxes['dashboard']['normal']['high'])) {
+            foreach ($wp_meta_boxes['dashboard']['normal']['high'] as $id => $box) {
+                if (strpos($id, 'bimarstop_') !== 0) {
+                    unset($wp_meta_boxes['dashboard']['normal']['high'][$id]);
+                }
+            }
+        }
+        if (isset($wp_meta_boxes['dashboard']['side']['high'])) {
+            foreach ($wp_meta_boxes['dashboard']['side']['high'] as $id => $box) {
+                if (strpos($id, 'bimarstop_') !== 0) {
+                    unset($wp_meta_boxes['dashboard']['side']['high'][$id]);
+                }
+            }
+        }
     }
 
     public function settings_page(): void {
