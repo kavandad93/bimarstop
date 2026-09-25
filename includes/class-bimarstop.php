@@ -63,7 +63,7 @@ final class Plugin {
     }
 
     public function force_patient_registration_role($role, $userdata) {
-        return 'bimarstop_patient';
+        return is_admin() ? $role : 'bimarstop_patient';
     }
 
     public function restrict_role_admin_menu(): void {
@@ -71,7 +71,6 @@ final class Plugin {
         $role = $this->current_role();
         if ($role === 'bimarstop_patient' || $role === 'bimarstop_doctor' || $role === 'bimarstop_operator') {
             $menus = [
-                'index.php',
                 'about.php',
                 'edit.php',
                 'upload.php',
@@ -358,7 +357,7 @@ final class Plugin {
     }
 
     public function dashboard_setup(): void {
-        if (!current_user_can('manage_options')) return;
+        if (!is_user_logged_in()) return;
         global $wp_meta_boxes;
         if (!isset($wp_meta_boxes['dashboard']['normal']['core'])) return;
         foreach ($wp_meta_boxes['dashboard']['normal']['core'] as $id => $box) {
