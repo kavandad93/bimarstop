@@ -499,7 +499,7 @@ final class Plugin {
         function load(){var f=new FormData();f.append("action","bimarstop_private_get_messages");f.append("nonce","'.esc_js($nonce).'");f.append("thread_id","'.(int)$thread->id.'");f.append("last_id",last);
         fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(x=>{if(!x.success)return;x.data.messages.forEach(function(m){var p=document.createElement("p");var s=document.createElement("strong");s.textContent=m.sender;p.appendChild(s);p.appendChild(document.createTextNode(": "+m.message));box.appendChild(p);last=Math.max(last,parseInt(m.id));box.scrollTop=box.scrollHeight;});});}
         send.onclick=function(){var value=input.value.trim();if(!value)return;var f=new FormData();f.append("action","bimarstop_private_send_message");f.append("nonce","'.esc_js($nonce).'");f.append("thread_id","'.(int)$thread->id.'");f.append("message",value);
-        send.disabled=true;fetch("'.esc_url($ajax).' ",{method:"POST",body:f}).then(r=>r.json()).then(function(x){if(x.success)input.value="";send.disabled=false;load();});};load();setInterval(load,4000);})();</script>';
+        send.disabled=true;fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(function(x){if(x.success)input.value="";send.disabled=false;load();});};load();setInterval(load,4000);})();</script>';
     }
 
     public function operator_private_chats_page(): void {
@@ -527,6 +527,14 @@ final class Plugin {
     public function admin_private_chats_page(): void {
         if (!current_user_can('manage_options')) return;
         global $wpdb;
+        $thread_id = absint($_GET['thread'] ?? 0);
+        if ($thread_id) {
+            $t = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_private_threads WHERE id=%d", $thread_id));
+            if ($t) {
+                $this->render_private_chat((int)$t->user_a_id === get_current_user_id() ? (int)$t->user_b_id : (int)$t->user_a_id, 'bimarstop-private-chats');
+                return;
+            }
+        }
         $rows = $wpdb->get_results("SELECT t.*, a.display_name AS a_name, b.display_name AS b_name FROM {$wpdb->prefix}bimarstop_private_threads t LEFT JOIN {$wpdb->users} a ON a.ID=t.user_a_id LEFT JOIN {$wpdb->users} b ON b.ID=t.user_b_id ORDER BY t.updated_at DESC");
         echo '<div class="wrap" dir="rtl"><h1>💬 چت‌های داخلی</h1><p>گفتگوهای خصوصی پزشک و اوپراتور.</p><table class="widefat striped"><thead><tr><th>کاربر اول</th><th>کاربر دوم</th><th>وضعیت</th><th>آخرین بروزرسانی</th><th>عملیات</th></tr></thead><tbody>';
         foreach ($rows as $r) echo '<tr><td>'.esc_html($r->a_name).'</td><td>'.esc_html($r->b_name).'</td><td>'.esc_html($r->status).'</td><td>'.esc_html($r->updated_at).'</td><td><a class="button" href="'.esc_url(admin_url('admin.php?page=bimarstop-private-chats&thread='.(int)$r->id)).'">مشاهده</a></td></tr>';
