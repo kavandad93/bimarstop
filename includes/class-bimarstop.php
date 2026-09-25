@@ -255,7 +255,7 @@ final class Plugin {
     }
 
     private function can_use_documents(): bool {
-        return current_user_can('manage_options') || in_array($this->current_role(),['bimarstop_operator','bimarstop_doctor','bimarstop_patient'],true);
+        return $this->current_role() === 'bimarstop_operator';
     }
 
     private function themes(): array {
@@ -331,7 +331,6 @@ final class Plugin {
             add_menu_page('BimarStop', 'BimarStop', 'read', 'bimarstop', [$this, 'patient_dashboard'], 'dashicons-heart', 25);
             add_submenu_page('bimarstop', 'داشبورد', 'داشبورد', 'read', 'bimarstop', [$this, 'patient_dashboard']);
             add_submenu_page('bimarstop', 'چت با اپراتور', 'چت با اپراتور', 'read', 'bimarstop-chat', [$this, 'patient_chat_page']);
-            add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'documents_page']);
             return;
         }
 
@@ -340,7 +339,6 @@ final class Plugin {
             add_submenu_page('bimarstop', 'داشبورد', 'داشبورد', 'read', 'bimarstop', [$this, 'doctor_dashboard']);
             add_submenu_page('bimarstop', 'پرونده‌ها و اتاق‌ها', 'پرونده‌ها و اتاق‌ها', 'read', 'bimarstop-rooms', [$this, 'role_placeholder']);
             add_submenu_page('bimarstop', 'پیام‌ها', 'پیام‌ها', 'read', 'bimarstop-messages', [$this, 'role_placeholder']);
-            add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'documents_page']);
             add_submenu_page('bimarstop', 'تماس‌ها', 'تماس‌ها', 'read', 'bimarstop-calls', [$this, 'role_placeholder']);
             add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
             add_submenu_page('bimarstop', 'چت با اوپراتورها', 'چت با اوپراتورها', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page']);
@@ -354,9 +352,9 @@ final class Plugin {
             add_submenu_page('bimarstop', 'بیماران', 'بیماران', 'read', 'bimarstop-patients', [$this, 'patients_page']);
             add_submenu_page('bimarstop', 'پیام‌ها', 'پیام‌ها', 'read', 'bimarstop-messages', [$this, 'operator_chat_queue']);
             add_submenu_page('bimarstop', 'چت با مریض', 'چت با مریض', 'read', 'bimarstop-chat', [$this, 'operator_chat_page']);
-            add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'documents_page']);
             add_submenu_page('bimarstop', 'اعلان‌ها', 'اعلان‌ها', 'read', 'bimarstop-notifications', [$this, 'role_placeholder']);
-            add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
             add_submenu_page('bimarstop', 'چت با پزشکان', 'چت با پزشکان', 'read', 'bimarstop-doctor-chats', [$this, 'operator_private_chats_page']);
             return;
         }
@@ -757,12 +755,13 @@ final class Plugin {
             $wpdb->insert($table,['user_id'=>$uid,'subject'=>sanitize_text_field(wp_unslash($_POST['subject']??'')),'description'=>sanitize_textarea_field(wp_unslash($_POST['description']??'')),'priority'=>in_array($_POST['priority']??'normal',['low','normal','high'],true)?$_POST['priority']:'normal','status'=>'open','created_at'=>current_time('mysql'),'updated_at'=>current_time('mysql')],['%d','%s','%s','%s','%s','%s']);
             echo '<div class="notice notice-success"><p>گزارش مشکل ثبت شد.</p></div>';
         }
-        if(current_user_can('manage_options') && isset($_POST['bimarstop_issue_status_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['bimarstop_issue_status_nonce'])),'bimarstop_issue_status')){
+        $report_manager = current_user_can('manage_options') || $this->current_role() === 'bimarstop_operator';
+        if($report_manager && isset($_POST['bimarstop_issue_status_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['bimarstop_issue_status_nonce'])),'bimarstop_issue_status')){
             $id=absint($_POST['issue_id']??0); $status=sanitize_key($_POST['status']??'open');
             if(in_array($status,['open','progress','closed'],true)) $wpdb->update($table,['status'=>$status,'updated_at'=>current_time('mysql')],['id'=>$id],['%s','%s'],['%d']);
         }
         echo '<div class="wrap" dir="rtl"><h1>🛠 گزارش مشکل</h1>';
-        if(current_user_can('manage_options')){
+        if($report_manager){
             $rows=$wpdb->get_results("SELECT r.*,u.display_name FROM $table r LEFT JOIN {$wpdb->users} u ON u.ID=r.user_id ORDER BY r.id DESC");
             echo '<table class="widefat striped"><thead><tr><th>#</th><th>کاربر</th><th>موضوع</th><th>اولویت</th><th>وضعیت</th><th>تاریخ</th><th>تغییر</th></tr></thead><tbody>';
             foreach($rows as $r){ echo '<tr><td>'.(int)$r->id.'</td><td>'.esc_html($r->display_name).'</td><td>'.esc_html($r->subject).'<br><small>'.esc_html($r->description).'</small></td><td>'.esc_html($r->priority).'</td><td>'.esc_html($r->status).'</td><td>'.esc_html($r->created_at).'</td><td><form method="post">'.wp_nonce_field('bimarstop_issue_status','bimarstop_issue_status_nonce',true,false).'<input type="hidden" name="issue_id" value="'.(int)$r->id.'"><select name="status"><option value="open">باز</option><option value="progress">در حال بررسی</option><option value="closed">بسته</option></select> <button class="button">ذخیره</button></form></td></tr>'; }
@@ -782,7 +781,7 @@ final class Plugin {
         $ct=$wpdb->prefix.'bimarstop_document_categories';
         $st=$wpdb->prefix.'bimarstop_document_shares';
         $uid=get_current_user_id();
-        $manager=current_user_can('manage_options')||in_array($this->current_role(),['bimarstop_operator','bimarstop_doctor'],true);
+        $manager=$this->current_role()==='bimarstop_operator';
 
         if($manager && $_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['bimarstop_doc_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['bimarstop_doc_nonce'])),'bimarstop_doc')){
             $action=sanitize_key($_POST['doc_action']??'');
@@ -860,7 +859,7 @@ final class Plugin {
     }
 
     public function ajax_move_document(): void {
-        if(!current_user_can('manage_options') && !in_array($this->current_role(),['bimarstop_operator','bimarstop_doctor'],true)) wp_send_json_error();
+        if($this->current_role()!=='bimarstop_operator') wp_send_json_error(['message'=>'فقط اوپراتور به مدارک دسترسی دارد.']);
         check_ajax_referer('bimarstop_chat','nonce');
         global $wpdb;
         $id=absint($_POST['document_id']??0);$cat=absint($_POST['category_id']??0);
