@@ -2,14 +2,14 @@
 /**
  * Plugin Name: BimarStop
  * Description: BimarStop theme system and WordPress page rendering foundation.
- * Version: 0.3.0
+ * Version: 0.4.0
  * Author: BimarStop
  * License: Proprietary
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('BIMARSTOP_VERSION', '0.3.0');
+define('BIMARSTOP_VERSION', '0.4.0');
 define('BIMARSTOP_FILE', __FILE__);
 define('BIMARSTOP_DIR', plugin_dir_path(__FILE__));
 define('BIMARSTOP_URL', plugin_dir_url(__FILE__));
