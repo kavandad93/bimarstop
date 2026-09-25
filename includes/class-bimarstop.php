@@ -40,7 +40,7 @@ final class Plugin {
 
     public static function deactivate(): void { flush_rewrite_rules(); }
 
-    public function register_roles(): void { self::register_bimarstop_roles(); }
+    public function register_roles(): void { self::register_bimarstop_roles(); self::create_chat_tables(); }
 
     private static function register_bimarstop_roles(): void {
         $patient = get_role('bimarstop_patient');
