@@ -26,6 +26,8 @@ final class Plugin {
         add_action('wp_ajax_bimarstop_private_send_message', [$this, 'ajax_private_send_message']);
         add_action('wp_ajax_bimarstop_private_get_messages', [$this, 'ajax_private_get_messages']);
         add_action('wp_ajax_bimarstop_download_file', [$this, 'ajax_download_file']);
+        add_action('wp_ajax_bimarstop_get_documents', [$this, 'ajax_get_documents']);
+        add_action('wp_ajax_bimarstop_send_document', [$this, 'ajax_send_document']);
         add_action('template_redirect', [$this, 'require_login']);
         add_filter('show_admin_bar', [$this, 'show_admin_bar']);
         add_filter('pre_user_role', [$this, 'force_patient_registration_role'], 10, 2);
@@ -44,7 +46,7 @@ final class Plugin {
 
     public static function deactivate(): void { flush_rewrite_rules(); }
 
-    public function register_roles(): void { self::register_bimarstop_roles(); self::create_chat_tables(); self::create_private_chat_tables(); }
+    public function register_roles(): void { self::register_bimarstop_roles(); self::create_chat_tables(); self::create_private_chat_tables(); self::create_report_and_document_tables(); }
 
     private static function register_bimarstop_roles(): void {
         $patient = get_role('bimarstop_patient');
@@ -173,6 +175,73 @@ final class Plugin {
         ) {$charset};");
     }
 
+    private static function create_report_and_document_tables(): void {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        $charset = $wpdb->get_charset_collate();
+        $reports = $wpdb->prefix . 'bimarstop_issue_reports';
+        $cats = $wpdb->prefix . 'bimarstop_document_categories';
+        $docs = $wpdb->prefix . 'bimarstop_documents';
+        dbDelta("CREATE TABLE $reports (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            user_id bigint(20) unsigned NOT NULL,
+            subject varchar(255) NOT NULL,
+            description text NOT NULL,
+            priority varchar(20) NOT NULL DEFAULT 'normal',
+            status varchar(20) NOT NULL DEFAULT 'open',
+            created_at datetime NOT NULL,
+            updated_at datetime NOT NULL,
+            PRIMARY KEY (id),
+            KEY user_id (user_id),
+            KEY status (status)
+        ) $charset;");
+        dbDelta("CREATE TABLE $cats (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            name varchar(100) NOT NULL,
+            created_at datetime NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY name (name)
+        ) $charset;");
+        dbDelta("CREATE TABLE $docs (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            category_id bigint(20) unsigned NOT NULL DEFAULT 0,
+            path text NOT NULL,
+            name varchar(255) NOT NULL,
+            size bigint(20) unsigned NOT NULL DEFAULT 0,
+            type varchar(100) NOT NULL DEFAULT 'application/octet-stream',
+            created_at datetime NOT NULL,
+            updated_at datetime NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY path_hash (path(191)),
+            KEY category_id (category_id)
+        ) $charset;");
+        $count=(int)$wpdb->get_var("SELECT COUNT(*) FROM $cats");
+        if($count===0) $wpdb->insert($cats,['name'=>'عمومی','created_at'=>current_time('mysql')],['%s','%s']);
+    }
+
+    private function sync_documents(): void {
+        global $wpdb;
+        $uploads=wp_upload_dir();
+        if(!empty($uploads['error']) || empty($uploads['basedir']) || !is_dir($uploads['basedir'])) return;
+        $allowed=['pdf'=>'application/pdf','jpg'=>'image/jpeg','jpeg'=>'image/jpeg','png'=>'image/png','webp'=>'image/webp','doc'=>'application/msword','docx'=>'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        $table=$wpdb->prefix.'bimarstop_documents';
+        try { $it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($uploads['basedir'], FilesystemIterator::SKIP_DOTS)); } catch(Throwable $e){ return; }
+        foreach($it as $file){
+            if(!$file->isFile()) continue;
+            $path=$file->getPathname();
+            $ext=strtolower(pathinfo($path,PATHINFO_EXTENSION));
+            if(!isset($allowed[$ext])) continue;
+            $real=realpath($path); $base=realpath($uploads['basedir']);
+            if(!$real||!$base||strpos($real,$base)!==0) continue;
+            $exists=$wpdb->get_var($wpdb->prepare("SELECT id FROM $table WHERE path=%s",$real));
+            if(!$exists) $wpdb->insert($table,['path'=>$real,'name'=>basename($real),'size'=>(int)$file->getSize(),'type'=>$allowed[$ext],'created_at'=>current_time('mysql'),'updated_at'=>current_time('mysql')],['%s','%s','%d','%s','%s','%s']);
+        }
+    }
+
+    private function can_use_documents(): bool {
+        return current_user_can('manage_options') || in_array($this->current_role(),['bimarstop_operator','bimarstop_doctor'],true);
+    }
+
     private function themes(): array {
         return [
             'light-1' => 'روشن ۱ — وزیرمتن',
@@ -254,9 +323,9 @@ final class Plugin {
             add_submenu_page('bimarstop', 'داشبورد', 'داشبورد', 'read', 'bimarstop', [$this, 'doctor_dashboard']);
             add_submenu_page('bimarstop', 'پرونده‌ها و اتاق‌ها', 'پرونده‌ها و اتاق‌ها', 'read', 'bimarstop-rooms', [$this, 'role_placeholder']);
             add_submenu_page('bimarstop', 'پیام‌ها', 'پیام‌ها', 'read', 'bimarstop-messages', [$this, 'role_placeholder']);
-            add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'documents_page']);
             add_submenu_page('bimarstop', 'تماس‌ها', 'تماس‌ها', 'read', 'bimarstop-calls', [$this, 'role_placeholder']);
-            add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
             add_submenu_page('bimarstop', 'چت با اوپراتورها', 'چت با اوپراتورها', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page']);
             return;
         }
@@ -285,11 +354,12 @@ final class Plugin {
         add_submenu_page('bimarstop', 'چت اپراتورها', 'چت اپراتورها', 'manage_options', 'bimarstop-chat', [$this, 'operator_chat_queue']);
         add_submenu_page('bimarstop', 'چت داخلی', 'چت داخلی', 'manage_options', 'bimarstop-private-chats', [$this, 'admin_private_chats_page']);
         add_submenu_page('bimarstop', 'پرونده‌ها و اتاق‌ها', 'پرونده‌ها و اتاق‌ها', 'manage_options', 'bimarstop-rooms', [$this, 'role_placeholder']);
-        add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'manage_options', 'bimarstop-documents', [$this, 'role_placeholder']);
+        add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'manage_options', 'bimarstop-documents', [$this, 'documents_page']);
         add_submenu_page('bimarstop', 'تماس‌ها', 'تماس‌ها', 'manage_options', 'bimarstop-calls', [$this, 'role_placeholder']);
         add_submenu_page('bimarstop', 'پرداخت‌ها', 'پرداخت‌ها', 'manage_options', 'bimarstop-payments', [$this, 'role_placeholder']);
         add_submenu_page('bimarstop', 'اعلان‌ها و پیامک', 'اعلان‌ها و پیامک', 'manage_options', 'bimarstop-notifications', [$this, 'role_placeholder']);
         add_submenu_page('bimarstop', 'هوش مصنوعی', 'هوش مصنوعی', 'manage_options', 'bimarstop-ai', [$this, 'role_placeholder']);
+        add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'manage_options', 'bimarstop-report-issue', [$this, 'report_issue_page']);
         add_submenu_page('bimarstop', 'گزارش‌ها و لاگ‌ها', 'گزارش‌ها و لاگ‌ها', 'manage_options', 'bimarstop-logs', [$this, 'role_placeholder']);
         add_submenu_page('bimarstop', 'تنظیمات', 'تنظیمات', 'manage_options', 'bimarstop-settings', [$this, 'settings_page']);
     }
@@ -374,7 +444,7 @@ final class Plugin {
         echo '<aside class="bimar-chat-side"><div class="bimar-chat-side-title">گفت‌وگوی شما</div><div class="bimar-chat-tab active">💬 پشتیبانی</div><div class="bimar-chat-side-info">🔒 این گفتگو خصوصی است<br><span>فایل‌های PDF، JPG، PNG و DOCX تا ۱۰ مگابایت قابل ارسال‌اند.</span></div></aside>';
         echo '<main class="bimar-chat-main"><div id="bimarstop-chat-box" class="bimar-chat-box"><div class="bimar-chat-welcome"><div class="bimar-chat-welcome-icon">💙</div><h2>سلام! چطور می‌توانیم کمکتان کنیم؟</h2><p>پیامتان را بنویسید. اگر لازم است، مدارک را هم با 📎 پیوست کنید.</p></div></div>';
         echo '<div id="bimar-chat-attachment" class="bimar-chat-attachment" hidden><span>📎 <b id="bimar-file-name"></b></span><button type="button" id="bimar-file-remove">×</button></div>';
-        echo '<div class="bimar-chat-composer"><label class="bimar-attach"><input id="bimarstop-chat-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden>📎</label><textarea id="bimarstop-chat-input" rows="1" placeholder="پیام خود را بنویسید..."></textarea><button id="bimarstop-send" class="bimar-send">➤</button><div class="bimar-chat-hint">Enter برای ارسال • Shift+Enter برای خط جدید</div></div></main></div></div>';
+        echo '<div class="bimar-chat-composer"><label class="bimar-attach"><input id="bimarstop-chat-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden>📎</label>'.($this->can_use_documents() ? '<select id="bimarstop-chat-document" title="انتخاب مدرک موجود"><option value="">📚 مدرک موجود</option></select>' : '').'<textarea id="bimarstop-chat-input" rows="1" placeholder="پیام خود را بنویسید..."></textarea><button id="bimarstop-send" class="bimar-send">➤</button><div class="bimar-chat-hint">Enter برای ارسال • Shift+Enter برای خط جدید</div></div></main></div></div>';
         $this->chat_script();
     }
 
@@ -439,7 +509,7 @@ final class Plugin {
                 var value=input.value.trim();
                 if(!value && !file.files.length)return;
                 var f=new FormData();f.append("action","bimarstop_send_message");f.append("nonce","'.esc_js($nonce).'");f.append("message",value);
-                if(file.files[0])f.append("chat_file",file.files[0]);
+                if(file.files[0])f.append("chat_file",file.files[0]); if(docSelect&&docSelect.value)f.append("document_id",docSelect.value);
                 send.disabled=true;send.classList.add("loading");
                 fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(function(x){
                     send.disabled=false;send.classList.remove("loading");
@@ -448,7 +518,7 @@ final class Plugin {
             }
             send.onclick=sendMessage;
             input.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage();}});
-            load();setInterval(load,1000);
+            if(docSelect){var df=new FormData();df.append("action","bimarstop_get_documents");df.append("nonce","'.esc_js($nonce).'");fetch("'.esc_url($ajax).'",{method:"POST",body:df}).then(r=>r.json()).then(function(x){if(x.success)x.data.documents.forEach(function(d){var o=document.createElement("option");o.value=d.id;o.textContent="📎 "+d.name+" — "+d.category+" — "+d.size;docSelect.appendChild(o);});});} load();setInterval(load,1000);
         })();
         </script>';
     }
@@ -476,6 +546,12 @@ final class Plugin {
         if($this->current_role()==='bimarstop_operator' && (int)$thread->operator_id===0)$wpdb->update($tname,['operator_id'=>$uid,'updated_at'=>current_time('mysql')],['id'=>$thread->id],['%d','%s'],['%d']);
 
         $path='';$name='';$size=0;$type='';
+        if(empty($_FILES['chat_file']) && !empty($_POST['document_id']) && $this->can_use_documents()){
+            $did=absint($_POST['document_id']); global $wpdb;
+            $doc=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_documents WHERE id=%d",$did));
+            $uploads=wp_upload_dir(); $real=$doc?realpath($doc->path):false; $base=!empty($uploads['basedir'])?realpath($uploads['basedir']):false;
+            if($doc&&$real&&$base&&strpos($real,$base)===0&&is_file($real)){ $path=$real; $name=$doc->name; $size=(int)$doc->size; $type=$doc->type; }
+        }
         if(!empty($_FILES['chat_file']) && is_array($_FILES['chat_file'])){
             if((int)$_FILES['chat_file']['size']>10*1024*1024) wp_send_json_error(['message'=>'حداکثر حجم فایل ۱۰ مگابایت است.']);
             require_once ABSPATH.'wp-admin/includes/file.php';
@@ -559,13 +635,13 @@ final class Plugin {
         $partner=get_userdata($partner_id);$thread=$this->get_or_create_private_thread($uid,$partner_id);
         if(!$thread){echo '<div class="wrap" dir="rtl"><p>خطا در ساخت گفتگو.</p></div>';return;}
         echo '<div class="bimar-chat-page" dir="rtl"><div class="bimar-chat-header"><div><span class="bimar-chat-kicker">BimarStop • ارتباط داخلی</span><h1>💬 گفتگوی خصوصی</h1><p>با '.esc_html($partner->display_name?:$partner->user_login).'</p></div><a class="bimar-chat-back" href="'.esc_url(admin_url('admin.php?page='.$back_page)).'">← بازگشت</a></div>';
-        echo '<div class="bimar-chat-shell"><aside class="bimar-chat-side"><div class="bimar-chat-side-title">گفتگوی داخلی</div><div class="bimar-chat-tab active">💬 '.esc_html($partner->display_name?:$partner->user_login).'</div><div class="bimar-chat-side-info">🔒 گفتگوی خصوصی پزشک و اوپراتور<br><span>فایل‌های PDF، JPG، PNG و DOCX تا ۱۰ مگابایت.</span></div></aside><main class="bimar-chat-main"><div id="bimarstop-private-box" class="bimar-chat-box"></div><div id="bimar-private-attachment" class="bimar-chat-attachment" hidden><span>📎 <b id="bimar-private-file-name"></b></span><button type="button" id="bimar-private-file-remove">×</button></div><div class="bimar-chat-composer"><label class="bimar-attach"><input id="bimarstop-private-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden>📎</label><textarea id="bimarstop-private-input" rows="1" placeholder="پیام خود را بنویسید..."></textarea><button type="button" id="bimarstop-private-send" class="bimar-send">➤</button><div class="bimar-chat-hint">Enter برای ارسال • Shift+Enter برای خط جدید</div></div></main></div></div>';
+        echo '<div class="bimar-chat-shell"><aside class="bimar-chat-side"><div class="bimar-chat-side-title">گفتگوی داخلی</div><div class="bimar-chat-tab active">💬 '.esc_html($partner->display_name?:$partner->user_login).'</div><div class="bimar-chat-side-info">🔒 گفتگوی خصوصی پزشک و اوپراتور<br><span>فایل‌های PDF، JPG، PNG و DOCX تا ۱۰ مگابایت.</span></div></aside><main class="bimar-chat-main"><div id="bimarstop-private-box" class="bimar-chat-box"></div><div id="bimar-private-attachment" class="bimar-chat-attachment" hidden><span>📎 <b id="bimar-private-file-name"></b></span><button type="button" id="bimar-private-file-remove">×</button></div><div class="bimar-chat-composer"><label class="bimar-attach"><input id="bimarstop-private-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden>📎</label>'.($this->can_use_documents() ? '<select id="bimarstop-private-document" title="انتخاب مدرک موجود"><option value="">📚 مدرک موجود</option></select>' : '').'<textarea id="bimarstop-private-input" rows="1" placeholder="پیام خود را بنویسید..."></textarea><button type="button" id="bimarstop-private-send" class="bimar-send">➤</button><div class="bimar-chat-hint">Enter برای ارسال • Shift+Enter برای خط جدید</div></div></main></div></div>';
         $nonce=wp_create_nonce('bimarstop_private_chat');$ajax=admin_url('admin-ajax.php');
-        echo '<script>(function(){var box=document.getElementById("bimarstop-private-box"),input=document.getElementById("bimarstop-private-input"),send=document.getElementById("bimarstop-private-send"),file=document.getElementById("bimarstop-private-file"),att=document.getElementById("bimar-private-attachment"),fn=document.getElementById("bimar-private-file-name"),rm=document.getElementById("bimar-private-file-remove"),last=0;
+        echo '<script>(function(){var box=document.getElementById("bimarstop-private-box"),input=document.getElementById("bimarstop-private-input"),send=document.getElementById("bimarstop-private-send"),file=document.getElementById("bimarstop-private-file"),att=document.getElementById("bimar-private-attachment"),fn=document.getElementById("bimar-private-file-name"),rm=document.getElementById("bimar-private-file-remove"),docSelect=document.getElementById("bimarstop-private-document"),last=0;
         function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML;}function render(m){var row=document.createElement("div");row.className="bimar-msg "+(m.mine?"mine":"theirs");var b=document.createElement("div");b.className="bimar-msg-bubble";var s=document.createElement("div");s.className="bimar-msg-sender";s.textContent=m.sender;b.appendChild(s);if(m.message){var x=document.createElement("div");x.className="bimar-msg-text";x.textContent=m.message;b.appendChild(x);}if(m.attachment){var a=document.createElement("a");a.className="bimar-file-card";a.href=m.attachment.url;a.innerHTML="<span class=\"bimar-file-icon\">📎</span><span><b>"+esc(m.attachment.name)+"</b><small>"+esc(m.attachment.size)+"</small></span><strong>دانلود</strong>";b.appendChild(a);}var tm=document.createElement("div");tm.className="bimar-msg-time";tm.textContent=m.time||"";b.appendChild(tm);row.appendChild(b);box.appendChild(row);}
         function load(){var f=new FormData();f.append("action","bimarstop_private_get_messages");f.append("nonce","'.esc_js($nonce).'");f.append("thread_id","'.(int)$thread->id.'");f.append("last_id",last);fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(x=>{if(!x.success)return;x.data.messages.forEach(function(m){render(m);last=Math.max(last,parseInt(m.id));});if(x.data.messages.length)box.scrollTop=box.scrollHeight;});}
         function clearFile(){file.value="";att.hidden=true;fn.textContent="";}file.addEventListener("change",function(){if(this.files[0]){fn.textContent=this.files[0].name;att.hidden=false;}});rm.onclick=clearFile;
-        function sendMsg(){var v=input.value.trim();var chosen=file.files[0]||null;if(!v&&!chosen)return;var f=new FormData();f.append("action","bimarstop_private_send_message");f.append("nonce","'.esc_js($nonce).'");f.append("thread_id","'.(int)$thread->id.'");f.append("message",v);if(chosen)f.append("chat_file",chosen);send.disabled=true;input.value="";file.value="";att.classList.remove("show");fn.textContent="";rm.style.display="none";fetch("'.esc_url($ajax).'",{method:"POST",body:f,keepalive:true}).then(function(r){return r.json();}).then(function(x){send.disabled=false;if(x.success){load();}else{alert((x.data&&x.data.message)?x.data.message:"ارسال ناموفق بود.");}}).catch(function(){send.disabled=false;alert("ارتباط با سرور برقرار نشد.");});}send.onclick=function(e){e.preventDefault();sendMsg();};
+        function sendMsg(){var v=input.value.trim();var chosen=file.files[0]||null;if(!v&&!chosen)return;var f=new FormData();f.append("action","bimarstop_private_send_message");f.append("nonce","'.esc_js($nonce).'");f.append("thread_id","'.(int)$thread->id.'");f.append("message",v);if(chosen)f.append("chat_file",chosen);if(docSelect&&docSelect.value)f.append("document_id",docSelect.value);send.disabled=true;input.value="";file.value="";att.classList.remove("show");fn.textContent="";rm.style.display="none";fetch("'.esc_url($ajax).'",{method:"POST",body:f,keepalive:true}).then(function(r){return r.json();}).then(function(x){send.disabled=false;if(x.success){load();}else{alert((x.data&&x.data.message)?x.data.message:"ارسال ناموفق بود.");}}).catch(function(){send.disabled=false;alert("ارتباط با سرور برقرار نشد.");});}send.onclick=function(e){e.preventDefault();sendMsg();};
         input.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg();}});
         load();setInterval(load,4000);})();</script>';
     }
@@ -616,6 +692,12 @@ final class Plugin {
         global $wpdb;$uid=get_current_user_id();$thread_id=absint($_POST['thread_id']??0);$msg=sanitize_textarea_field(wp_unslash($_POST['message']??''));
         if(!$thread_id||!$this->private_thread_access($thread_id,$uid))wp_send_json_error();
         $path='';$name='';$size=0;$type='';
+        if(empty($_FILES['chat_file']) && !empty($_POST['document_id']) && $this->can_use_documents()){
+            $did=absint($_POST['document_id']); global $wpdb;
+            $doc=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_documents WHERE id=%d",$did));
+            $uploads=wp_upload_dir(); $real=$doc?realpath($doc->path):false; $base=!empty($uploads['basedir'])?realpath($uploads['basedir']):false;
+            if($doc&&$real&&$base&&strpos($real,$base)===0&&is_file($real)){ $path=$real; $name=$doc->name; $size=(int)$doc->size; $type=$doc->type; }
+        }
         if(!empty($_FILES['chat_file'])&&is_array($_FILES['chat_file'])){
             if((int)$_FILES['chat_file']['size']>10*1024*1024)wp_send_json_error(['message'=>'حداکثر حجم فایل ۱۰ مگابایت است.']);
             require_once ABSPATH.'wp-admin/includes/file.php';
@@ -649,6 +731,62 @@ final class Plugin {
         else wp_die('فایل پیدا نشد',404);
         if(!$path||!is_file($path))wp_die('فایل پیدا نشد',404);
         nocache_headers();header('Content-Type: '.sanitize_text_field($type));header('Content-Length: '.filesize($path));header('Content-Disposition: attachment; filename="'.str_replace('"','',wp_basename($name)).'"');readfile($path);exit;
+    }
+
+    public function report_issue_page(): void {
+        if(!current_user_can('read')) return;
+        global $wpdb; $table=$wpdb->prefix.'bimarstop_issue_reports'; $uid=get_current_user_id();
+        if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['bimarstop_issue_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['bimarstop_issue_nonce'])),'bimarstop_issue')){
+            $wpdb->insert($table,['user_id'=>$uid,'subject'=>sanitize_text_field(wp_unslash($_POST['subject']??'')),'description'=>sanitize_textarea_field(wp_unslash($_POST['description']??'')),'priority'=>in_array($_POST['priority']??'normal',['low','normal','high'],true)?$_POST['priority']:'normal','status'=>'open','created_at'=>current_time('mysql'),'updated_at'=>current_time('mysql')],['%d','%s','%s','%s','%s','%s']);
+            echo '<div class="notice notice-success"><p>گزارش مشکل ثبت شد.</p></div>';
+        }
+        if(current_user_can('manage_options') && isset($_POST['bimarstop_issue_status_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['bimarstop_issue_status_nonce'])),'bimarstop_issue_status')){
+            $id=absint($_POST['issue_id']??0); $status=sanitize_key($_POST['status']??'open');
+            if(in_array($status,['open','progress','closed'],true)) $wpdb->update($table,['status'=>$status,'updated_at'=>current_time('mysql')],['id'=>$id],['%s','%s'],['%d']);
+        }
+        echo '<div class="wrap" dir="rtl"><h1>🛠 گزارش مشکل</h1>';
+        if(current_user_can('manage_options')){
+            $rows=$wpdb->get_results("SELECT r.*,u.display_name FROM $table r LEFT JOIN {$wpdb->users} u ON u.ID=r.user_id ORDER BY r.id DESC");
+            echo '<table class="widefat striped"><thead><tr><th>#</th><th>کاربر</th><th>موضوع</th><th>اولویت</th><th>وضعیت</th><th>تاریخ</th><th>تغییر</th></tr></thead><tbody>';
+            foreach($rows as $r){ echo '<tr><td>'.(int)$r->id.'</td><td>'.esc_html($r->display_name).'</td><td>'.esc_html($r->subject).'<br><small>'.esc_html($r->description).'</small></td><td>'.esc_html($r->priority).'</td><td>'.esc_html($r->status).'</td><td>'.esc_html($r->created_at).'</td><td><form method="post">'.wp_nonce_field('bimarstop_issue_status','bimarstop_issue_status_nonce',true,false).'<input type="hidden" name="issue_id" value="'.(int)$r->id.'"><select name="status"><option value="open">باز</option><option value="progress">در حال بررسی</option><option value="closed">بسته</option></select> <button class="button">ذخیره</button></form></td></tr>'; }
+            if(!$rows) echo '<tr><td colspan="7">گزارشی ثبت نشده است.</td></tr>';
+            echo '</tbody></table>';
+        } else {
+            echo '<form method="post" style="max-width:760px;background:#fff;padding:24px;border:1px solid #ddd;border-radius:12px">'.wp_nonce_field('bimarstop_issue','bimarstop_issue_nonce',true,false).'<p><label>موضوع<br><input class="regular-text" name="subject" required></label></p><p><label>اولویت<br><select name="priority"><option value="normal">عادی</option><option value="high">زیاد</option><option value="low">کم</option></select></label></p><p><label>شرح مشکل<br><textarea name="description" rows="8" style="width:100%" required></textarea></label></p><p><button class="button button-primary">ثبت گزارش</button></p></form>';
+        }
+        echo '</div>';
+    }
+
+    public function documents_page(): void {
+        if(!$this->can_use_documents()) return;
+        global $wpdb; $this->sync_documents(); $dt=$wpdb->prefix.'bimarstop_documents'; $ct=$wpdb->prefix.'bimarstop_document_categories';
+        if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['bimarstop_doc_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['bimarstop_doc_nonce'])),'bimarstop_doc')){
+            $action=sanitize_key($_POST['doc_action']??'');
+            if($action==='add_category'){ $name=sanitize_text_field(wp_unslash($_POST['category_name']??'')); if($name!=='')$wpdb->insert($ct,['name'=>$name,'created_at'=>current_time('mysql')],['%s','%s']); }
+            if($action==='set_category'){ $id=absint($_POST['doc_id']??0);$cat=absint($_POST['category_id']??0);$wpdb->update($dt,['category_id'=>$cat,'updated_at'=>current_time('mysql')],['id'=>$id],['%d','%s'],['%d']); }
+        }
+        $cats=$wpdb->get_results("SELECT * FROM $ct ORDER BY name ASC"); $rows=$wpdb->get_results("SELECT d.*,c.name AS category_name FROM $dt d LEFT JOIN $ct c ON c.id=d.category_id ORDER BY d.updated_at DESC");
+        echo '<div class="wrap" dir="rtl"><h1>📚 مدارک</h1><p>فایل‌های موجود در پوشه uploads بدون آپلود مجدد قابل استفاده در پیام‌ها هستند.</p><form method="post" style="margin:16px 0">'.wp_nonce_field('bimarstop_doc','bimarstop_doc_nonce',true,false).'<input type="hidden" name="doc_action" value="add_category"><input name="category_name" placeholder="نام دسته جدید" required> <button class="button">افزودن دسته</button></form><table class="widefat striped"><thead><tr><th>فایل</th><th>حجم</th><th>نوع</th><th>دسته</th><th>مسیر</th></tr></thead><tbody>';
+        foreach($rows as $r){ echo '<tr><td>📎 '.esc_html($r->name).'</td><td>'.size_format((int)$r->size).'</td><td>'.esc_html($r->type).'</td><td><form method="post">'.wp_nonce_field('bimarstop_doc','bimarstop_doc_nonce',true,false).'<input type="hidden" name="doc_action" value="set_category"><input type="hidden" name="doc_id" value="'.(int)$r->id.'"><select name="category_id" onchange="this.form.submit()">'; foreach($cats as $cat) echo '<option value="'.(int)$cat->id.'" '.selected((int)$r->category_id,(int)$cat->id,false).'>'.esc_html($cat->name).'</option>'; echo '</select></form></td><td><code>'.esc_html(str_replace(wp_upload_dir()['basedir'].'/','',$r->path)).'</code></td></tr>'; }
+        if(!$rows) echo '<tr><td colspan="5">فایل مجازی پیدا نشد.</td></tr>';
+        echo '</tbody></table></div>';
+    }
+
+    public function ajax_get_documents(): void {
+        check_ajax_referer('bimarstop_chat','nonce');
+        if(!$this->can_use_documents()) wp_send_json_error(['message'=>'دسترسی ندارید.']);
+        global $wpdb; $this->sync_documents();
+        $rows=$wpdb->get_results("SELECT d.id,d.name,d.size,d.type,c.name AS category_name FROM {$wpdb->prefix}bimarstop_documents d LEFT JOIN {$wpdb->prefix}bimarstop_document_categories c ON c.id=d.category_id ORDER BY c.name ASC,d.name ASC");
+        $out=[]; foreach($rows as $r)$out[]=['id'=>(int)$r->id,'name'=>$r->name,'size'=>size_format((int)$r->size),'category'=>$r->category_name?:'عمومی'];
+        wp_send_json_success(['documents'=>$out]);
+    }
+
+    public function ajax_send_document(): void {
+        if(!$this->can_use_documents()) wp_send_json_error();
+        check_ajax_referer('bimarstop_chat','nonce');
+        $did=absint($_POST['document_id']??0);
+        if(!$did)wp_send_json_error(['message'=>'مدرک انتخاب نشده است.']);
+        wp_send_json_success();
     }
 
     public function role_dashboard(): void { if (!current_user_can('read')) return; echo '<div class="wrap" dir="rtl"><h1>🏥 BimarStop</h1><p>داشبورد اختصاصی شما.</p></div>'; }
