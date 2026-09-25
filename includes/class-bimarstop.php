@@ -241,7 +241,7 @@ final class Plugin {
         if(!empty($uploads['error']) || empty($uploads['basedir']) || !is_dir($uploads['basedir'])) return;
         $allowed=['pdf'=>'application/pdf','jpg'=>'image/jpeg','jpeg'=>'image/jpeg','png'=>'image/png','webp'=>'image/webp','doc'=>'application/msword','docx'=>'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
         $table=$wpdb->prefix.'bimarstop_documents';
-        try { $it=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($uploads['basedir'], FilesystemIterator::SKIP_DOTS)); } catch(Throwable $e){ return; }
+        try { $it=new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($uploads['basedir'], \FilesystemIterator::SKIP_DOTS)); } catch(Throwable $e){ return; }
         foreach($it as $file){
             if(!$file->isFile()) continue;
             $path=$file->getPathname();
