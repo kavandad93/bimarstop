@@ -16,6 +16,7 @@ final class Plugin {
         add_filter('body_class', [$this, 'body_class']);
         add_action('admin_menu', [$this, 'admin_menu']);
         add_action('admin_init', [$this, 'register_settings']);
+        add_action('admin_enqueue_scripts', [$this, 'admin_assets']);
     }
 
     public static function activate(): void {
@@ -73,6 +74,23 @@ final class Plugin {
         ]);
     }
 
+    public function admin_assets(): void {
+        wp_enqueue_style(
+            'bimarstop-admin-font',
+            'https://cdn.jsdelivr.net/npm/@fontsource/vazirmatn@5.0.18/index.css',
+            [],
+            BIMARSTOP_VERSION
+        );
+        wp_add_inline_style('bimarstop-admin-font', '
+            body.wp-admin, body.wp-admin button, body.wp-admin input, body.wp-admin textarea,
+            body.wp-admin select, body.wp-admin option, body.wp-admin .wrap,
+            body.wp-admin #adminmenu, body.wp-admin #adminmenu .wp-submenu,
+            body.wp-admin #wpadminbar {
+                font-family: "Vazirmatn", Tahoma, Arial, sans-serif !important;
+            }
+        ');
+    }
+
     public function admin_menu(): void {
         add_menu_page(
             'BimarStop',
@@ -83,6 +101,137 @@ final class Plugin {
             'dashicons-heart',
             25
         );
+
+        add_submenu_page(
+            'bimarstop',
+            'داشبورد BimarStop',
+            'داشبورد',
+            'manage_options',
+            'bimarstop',
+            [$this, 'settings_page']
+        );
+
+        add_submenu_page(
+            'bimarstop',
+            'تنظیمات BimarStop',
+            'تنظیمات',
+            'manage_options',
+            'bimarstop-settings',
+            [$this, 'settings_page']
+        );
+
+        add_submenu_page(
+            'bimarstop',
+            'بیماران',
+            'بیماران',
+            'manage_options',
+            'bimarstop-patients',
+            [$this, 'placeholder_page']
+        );
+
+        add_submenu_page(
+            'bimarstop',
+            'پزشکان',
+            'پزشکان',
+            'manage_options',
+            'bimarstop-doctors',
+            [$this, 'placeholder_page']
+        );
+
+        add_submenu_page(
+            'bimarstop',
+            'اپراتورها',
+            'اپراتورها',
+            'manage_options',
+            'bimarstop-operators',
+            [$this, 'placeholder_page']
+        );
+
+        add_submenu_page(
+            'bimarstop',
+            'پرونده‌ها و اتاق‌ها',
+            'پرونده‌ها و اتاق‌ها',
+            'manage_options',
+            'bimarstop-rooms',
+            [$this, 'placeholder_page']
+        );
+
+        add_submenu_page(
+            'bimarstop',
+            'پیام‌ها',
+            'پیام‌ها',
+            'manage_options',
+            'bimarstop-messages',
+            [$this, 'placeholder_page']
+        );
+
+        add_submenu_page(
+            'bimarstop',
+            'مدارک',
+            'مدارک',
+            'manage_options',
+            'bimarstop-documents',
+            [$this, 'placeholder_page']
+        );
+
+        add_submenu_page(
+            'bimarstop',
+            'تماس‌ها',
+            'تماس‌ها',
+            'manage_options',
+            'bimarstop-calls',
+            [$this, 'placeholder_page']
+        );
+
+        add_submenu_page(
+            'bimarstop',
+            'جراحی و خدمات',
+            'جراحی و خدمات',
+            'manage_options',
+            'bimarstop-services',
+            [$this, 'placeholder_page']
+        );
+
+        add_submenu_page(
+            'bimarstop',
+            'پرداخت‌ها',
+            'پرداخت‌ها',
+            'manage_options',
+            'bimarstop-payments',
+            [$this, 'placeholder_page']
+        );
+
+        add_submenu_page(
+            'bimarstop',
+            'اعلان‌ها و پیامک',
+            'اعلان‌ها و پیامک',
+            'manage_options',
+            'bimarstop-notifications',
+            [$this, 'placeholder_page']
+        );
+
+        add_submenu_page(
+            'bimarstop',
+            'هوش مصنوعی',
+            'هوش مصنوعی',
+            'manage_options',
+            'bimarstop-ai',
+            [$this, 'placeholder_page']
+        );
+
+        add_submenu_page(
+            'bimarstop',
+            'گزارش‌ها و لاگ‌ها',
+            'گزارش‌ها و لاگ‌ها',
+            'manage_options',
+            'bimarstop-logs',
+            [$this, 'placeholder_page']
+        );
+    }
+
+    public function placeholder_page(): void {
+        if (!current_user_can('manage_options')) return;
+        echo '<div class="wrap" dir="rtl"><h1>BimarStop</h1><p>این بخش در حال توسعه است.</p></div>';
     }
 
     public function settings_page(): void {
