@@ -23,6 +23,8 @@ final class Plugin {
         add_action('wp_ajax_bimarstop_send_message', [$this, 'ajax_send_message']);
         add_action('wp_ajax_bimarstop_get_messages', [$this, 'ajax_get_messages']);
         add_action('wp_ajax_bimarstop_set_operator_status', [$this, 'ajax_set_operator_status']);
+        add_action('wp_ajax_bimarstop_private_send_message', [$this, 'ajax_private_send_message']);
+        add_action('wp_ajax_bimarstop_private_get_messages', [$this, 'ajax_private_get_messages']);
         add_action('template_redirect', [$this, 'require_login']);
         add_filter('show_admin_bar', [$this, 'show_admin_bar']);
         add_filter('pre_user_role', [$this, 'force_patient_registration_role'], 10, 2);
@@ -32,6 +34,7 @@ final class Plugin {
     public static function activate(): void {
         self::register_bimarstop_roles();
         self::create_chat_tables();
+        self::create_private_chat_tables();
         if (get_option('bimarstop_settings', false) === false) {
             add_option('bimarstop_settings', ['theme' => 'light-1']);
         }
@@ -40,7 +43,7 @@ final class Plugin {
 
     public static function deactivate(): void { flush_rewrite_rules(); }
 
-    public function register_roles(): void { self::register_bimarstop_roles(); self::create_chat_tables(); }
+    public function register_roles(): void { self::register_bimarstop_roles(); self::create_chat_tables(); self::create_private_chat_tables(); }
 
     private static function register_bimarstop_roles(): void {
         $patient = get_role('bimarstop_patient');
@@ -113,6 +116,39 @@ final class Plugin {
             PRIMARY KEY (id),
             KEY patient_id (patient_id),
             KEY operator_id (operator_id),
+            KEY status (status)
+        ) {$charset};");
+
+        dbDelta("CREATE TABLE {$messages} (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            thread_id bigint(20) unsigned NOT NULL,
+            sender_id bigint(20) unsigned NOT NULL,
+            message longtext NOT NULL,
+            created_at datetime NOT NULL,
+            PRIMARY KEY (id),
+            KEY thread_id (thread_id),
+            KEY sender_id (sender_id)
+        ) {$charset};");
+    }
+
+    private static function create_private_chat_tables(): void {
+        global $wpdb;
+        require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+        $charset = $wpdb->get_charset_collate();
+        $threads = $wpdb->prefix . 'bimarstop_private_threads';
+        $messages = $wpdb->prefix . 'bimarstop_private_messages';
+
+        dbDelta("CREATE TABLE {$threads} (
+            id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
+            user_a_id bigint(20) unsigned NOT NULL,
+            user_b_id bigint(20) unsigned NOT NULL,
+            status varchar(20) NOT NULL DEFAULT 'open',
+            created_at datetime NOT NULL,
+            updated_at datetime NOT NULL,
+            PRIMARY KEY (id),
+            UNIQUE KEY user_pair (user_a_id,user_b_id),
+            KEY user_a_id (user_a_id),
+            KEY user_b_id (user_b_id),
             KEY status (status)
         ) {$charset};");
 
@@ -209,6 +245,7 @@ final class Plugin {
             add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'role_placeholder']);
             add_submenu_page('bimarstop', 'تماس‌ها', 'تماس‌ها', 'read', 'bimarstop-calls', [$this, 'role_placeholder']);
             add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'چت با اوپراتورها', 'چت با اوپراتورها', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page']);
             return;
         }
 
@@ -222,6 +259,7 @@ final class Plugin {
             add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'role_placeholder']);
             add_submenu_page('bimarstop', 'اعلان‌ها', 'اعلان‌ها', 'read', 'bimarstop-notifications', [$this, 'role_placeholder']);
             add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'role_placeholder']);
+            add_submenu_page('bimarstop', 'چت با پزشکان', 'چت با پزشکان', 'read', 'bimarstop-doctor-chats', [$this, 'operator_private_chats_page']);
             return;
         }
 
@@ -233,6 +271,7 @@ final class Plugin {
         add_submenu_page('bimarstop', 'پزشکان', 'پزشکان', 'manage_options', 'bimarstop-doctors', [$this, 'doctors_page']);
         add_submenu_page('bimarstop', 'اوپراتورها', 'اوپراتورها', 'manage_options', 'bimarstop-operators', [$this, 'operators_page']);
         add_submenu_page('bimarstop', 'چت اپراتورها', 'چت اپراتورها', 'manage_options', 'bimarstop-chat', [$this, 'operator_chat_queue']);
+        add_submenu_page('bimarstop', 'چت داخلی', 'چت داخلی', 'manage_options', 'bimarstop-private-chats', [$this, 'admin_private_chats_page']);
         add_submenu_page('bimarstop', 'پرونده‌ها و اتاق‌ها', 'پرونده‌ها و اتاق‌ها', 'manage_options', 'bimarstop-rooms', [$this, 'role_placeholder']);
         add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'manage_options', 'bimarstop-documents', [$this, 'role_placeholder']);
         add_submenu_page('bimarstop', 'تماس‌ها', 'تماس‌ها', 'manage_options', 'bimarstop-calls', [$this, 'role_placeholder']);
@@ -397,6 +436,130 @@ final class Plugin {
         if($this->current_role()!=='bimarstop_operator') wp_send_json_error();
         update_user_meta(get_current_user_id(),'bimarstop_operator_online',!empty($_POST['online'])?'1':'0');
         wp_send_json_success();
+    }
+
+    private function private_pair(int $a, int $b): array {
+        return $a < $b ? [$a, $b] : [$b, $a];
+    }
+
+    private function private_partner_allowed(int $current_id, int $partner_id): bool {
+        if ($partner_id <= 0 || $current_id === $partner_id) return false;
+        $current = get_userdata($current_id);
+        $partner = get_userdata($partner_id);
+        if (!$current || !$partner) return false;
+        $cr = (array) $current->roles;
+        $pr = (array) $partner->roles;
+        return (($cr[0] ?? '') === 'bimarstop_operator' && ($pr[0] ?? '') === 'bimarstop_doctor')
+            || (($cr[0] ?? '') === 'bimarstop_doctor' && ($pr[0] ?? '') === 'bimarstop_operator')
+            || current_user_can('manage_options');
+    }
+
+    private function get_or_create_private_thread(int $a, int $b): ?object {
+        global $wpdb;
+        [$a, $b] = $this->private_pair($a, $b);
+        $table = $wpdb->prefix . 'bimarstop_private_threads';
+        $thread = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE user_a_id=%d AND user_b_id=%d LIMIT 1", $a, $b));
+        if ($thread) return $thread;
+        $now = current_time('mysql');
+        $wpdb->insert($table, [
+            'user_a_id' => $a, 'user_b_id' => $b, 'status' => 'open',
+            'created_at' => $now, 'updated_at' => $now
+        ], ['%d','%d','%s','%s','%s']);
+        return $wpdb->insert_id ? $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id=%d", $wpdb->insert_id)) : null;
+    }
+
+    private function private_thread_access(int $thread_id, int $user_id): bool {
+        global $wpdb;
+        $t = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_private_threads WHERE id=%d", $thread_id));
+        return $t && ((int)$t->user_a_id === $user_id || (int)$t->user_b_id === $user_id || current_user_can('manage_options'));
+    }
+
+    private function render_private_chat(int $partner_id, string $back_page): void {
+        if (!is_user_logged_in()) return;
+        $uid = get_current_user_id();
+        if (!$this->private_partner_allowed($uid, $partner_id)) {
+            echo '<div class="wrap" dir="rtl"><div class="notice notice-error"><p>دسترسی به این گفت‌وگو مجاز نیست.</p></div></div>';
+            return;
+        }
+        $partner = get_userdata($partner_id);
+        $thread = $this->get_or_create_private_thread($uid, $partner_id);
+        if (!$thread) { echo '<div class="wrap" dir="rtl"><p>خطا در ساخت گفتگو.</p></div>'; return; }
+        echo '<div class="wrap" dir="rtl"><p><a href="' . esc_url(admin_url('admin.php?page=' . $back_page)) . '">← بازگشت</a></p>';
+        echo '<h1>💬 گفتگوی خصوصی با ' . esc_html($partner->display_name ?: $partner->user_login) . '</h1>';
+        if (($partner->roles[0] ?? '') === 'bimarstop_operator') {
+            $online = get_user_meta($partner_id, 'bimarstop_operator_online', true);
+            echo '<p>وضعیت اوپراتور: <strong>' . ($online === '1' ? 'آنلاین 🟢' : 'آفلاین ⚪') . '</strong></p>';
+        }
+        echo '<div id="bimarstop-private-box" style="background:#fff;border:1px solid #ccd0d4;padding:16px;max-width:800px;min-height:300px;overflow:auto"></div>';
+        echo '<p><textarea id="bimarstop-private-input" rows="3" style="width:100%;max-width:800px" placeholder="پیام خود را بنویسید..."></textarea></p>';
+        echo '<button class="button button-primary" id="bimarstop-private-send">ارسال پیام</button></div>';
+        $nonce = wp_create_nonce('bimarstop_private_chat');
+        $ajax = admin_url('admin-ajax.php');
+        echo '<script>(function(){var box=document.getElementById("bimarstop-private-box"),input=document.getElementById("bimarstop-private-input"),send=document.getElementById("bimarstop-private-send"),last=0;
+        function load(){var f=new FormData();f.append("action","bimarstop_private_get_messages");f.append("nonce","'.esc_js($nonce).'");f.append("thread_id","'.(int)$thread->id.'");f.append("last_id",last);
+        fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(x=>{if(!x.success)return;x.data.messages.forEach(function(m){var p=document.createElement("p");var s=document.createElement("strong");s.textContent=m.sender;p.appendChild(s);p.appendChild(document.createTextNode(": "+m.message));box.appendChild(p);last=Math.max(last,parseInt(m.id));box.scrollTop=box.scrollHeight;});});}
+        send.onclick=function(){var value=input.value.trim();if(!value)return;var f=new FormData();f.append("action","bimarstop_private_send_message");f.append("nonce","'.esc_js($nonce).'");f.append("thread_id","'.(int)$thread->id.'");f.append("message",value);
+        send.disabled=true;fetch("'.esc_url($ajax).' ",{method:"POST",body:f}).then(r=>r.json()).then(function(x){if(x.success)input.value="";send.disabled=false;load();});};load();setInterval(load,4000);})();</script>';
+    }
+
+    public function operator_private_chats_page(): void {
+        if ($this->current_role() !== 'bimarstop_operator' && !current_user_can('manage_options')) return;
+        $partner = absint($_GET['user'] ?? 0);
+        if ($partner) { $this->render_private_chat($partner, 'bimarstop-doctor-chats'); return; }
+        $doctors = $this->users_by_role('bimarstop_doctor');
+        echo '<div class="wrap" dir="rtl"><h1>🩺 چت خصوصی با پزشکان</h1><table class="widefat striped"><thead><tr><th>پزشک</th><th>ایمیل</th><th>عملیات</th></tr></thead><tbody>';
+        foreach ($doctors as $u) echo '<tr><td>'.esc_html($u->display_name ?: $u->user_login).'</td><td>'.esc_html($u->user_email).'</td><td><a class="button button-primary" href="'.esc_url(admin_url('admin.php?page=bimarstop-doctor-chats&user='.(int)$u->ID)).'">شروع / ادامه چت</a></td></tr>';
+        if (!$doctors) echo '<tr><td colspan="3">پزشکی ثبت نشده است.</td></tr>';
+        echo '</tbody></table></div>';
+    }
+
+    public function doctor_private_chats_page(): void {
+        if ($this->current_role() !== 'bimarstop_doctor' && !current_user_can('manage_options')) return;
+        $partner = absint($_GET['user'] ?? 0);
+        if ($partner) { $this->render_private_chat($partner, 'bimarstop-doctor-chats'); return; }
+        $operators = $this->users_by_role('bimarstop_operator');
+        echo '<div class="wrap" dir="rtl"><h1>👨‍💻 چت خصوصی با اوپراتورها</h1><table class="widefat striped"><thead><tr><th>اوپراتور</th><th>وضعیت</th><th>ایمیل</th><th>عملیات</th></tr></thead><tbody>';
+        foreach ($operators as $u) { $online = get_user_meta($u->ID, 'bimarstop_operator_online', true) === '1'; echo '<tr><td>'.esc_html($u->display_name ?: $u->user_login).'</td><td>'.($online?'آنلاین 🟢':'آفلاین ⚪').'</td><td>'.esc_html($u->user_email).'</td><td><a class="button button-primary" href="'.esc_url(admin_url('admin.php?page=bimarstop-doctor-chats&user='.(int)$u->ID)).'">شروع / ادامه چت</a></td></tr>'; }
+        if (!$operators) echo '<tr><td colspan="4">اوپراتوری ثبت نشده است.</td></tr>';
+        echo '</tbody></table></div>';
+    }
+
+    public function admin_private_chats_page(): void {
+        if (!current_user_can('manage_options')) return;
+        global $wpdb;
+        $rows = $wpdb->get_results("SELECT t.*, a.display_name AS a_name, b.display_name AS b_name FROM {$wpdb->prefix}bimarstop_private_threads t LEFT JOIN {$wpdb->users} a ON a.ID=t.user_a_id LEFT JOIN {$wpdb->users} b ON b.ID=t.user_b_id ORDER BY t.updated_at DESC");
+        echo '<div class="wrap" dir="rtl"><h1>💬 چت‌های داخلی</h1><p>گفتگوهای خصوصی پزشک و اوپراتور.</p><table class="widefat striped"><thead><tr><th>کاربر اول</th><th>کاربر دوم</th><th>وضعیت</th><th>آخرین بروزرسانی</th><th>عملیات</th></tr></thead><tbody>';
+        foreach ($rows as $r) echo '<tr><td>'.esc_html($r->a_name).'</td><td>'.esc_html($r->b_name).'</td><td>'.esc_html($r->status).'</td><td>'.esc_html($r->updated_at).'</td><td><a class="button" href="'.esc_url(admin_url('admin.php?page=bimarstop-private-chats&thread='.(int)$r->id)).'">مشاهده</a></td></tr>';
+        if (!$rows) echo '<tr><td colspan="5">هنوز چت داخلی‌ای وجود ندارد.</td></tr>';
+        echo '</tbody></table></div>';
+    }
+
+    public function ajax_private_send_message(): void {
+        check_ajax_referer('bimarstop_private_chat','nonce');
+        if (!is_user_logged_in()) wp_send_json_error();
+        global $wpdb;
+        $uid = get_current_user_id();
+        $thread_id = absint($_POST['thread_id'] ?? 0);
+        $msg = sanitize_textarea_field(wp_unslash($_POST['message'] ?? ''));
+        if (!$thread_id || $msg === '' || !$this->private_thread_access($thread_id, $uid)) wp_send_json_error();
+        $table = $wpdb->prefix . 'bimarstop_private_threads';
+        $wpdb->insert($wpdb->prefix.'bimarstop_private_messages', ['thread_id'=>$thread_id,'sender_id'=>$uid,'message'=>$msg,'created_at'=>current_time('mysql')], ['%d','%d','%s','%s']);
+        $wpdb->update($table, ['updated_at'=>current_time('mysql')], ['id'=>$thread_id], ['%s'], ['%d']);
+        wp_send_json_success();
+    }
+
+    public function ajax_private_get_messages(): void {
+        check_ajax_referer('bimarstop_private_chat','nonce');
+        if (!is_user_logged_in()) wp_send_json_error();
+        global $wpdb;
+        $uid = get_current_user_id();
+        $thread_id = absint($_POST['thread_id'] ?? 0);
+        $last = absint($_POST['last_id'] ?? 0);
+        if (!$thread_id || !$this->private_thread_access($thread_id, $uid)) wp_send_json_error();
+        $rows = $wpdb->get_results($wpdb->prepare("SELECT m.id,m.message,u.display_name FROM {$wpdb->prefix}bimarstop_private_messages m JOIN {$wpdb->users} u ON u.ID=m.sender_id WHERE m.thread_id=%d AND m.id>%d ORDER BY m.id ASC", $thread_id, $last));
+        $out = [];
+        foreach ($rows as $r) $out[] = ['id'=>(int)$r->id,'message'=>esc_html($r->message),'sender'=>esc_html($r->display_name)];
+        wp_send_json_success(['messages'=>$out]);
     }
 
     public function role_dashboard(): void { if (!current_user_can('read')) return; echo '<div class="wrap" dir="rtl"><h1>🏥 BimarStop</h1><p>داشبورد اختصاصی شما.</p></div>'; }
