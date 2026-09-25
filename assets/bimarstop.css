@@ -1,6 +1,25 @@
-:root{--bimar-bg:#f7f9fc;--bimar-surface:#fff;--bimar-text:#172033;--bimar-muted:#667085;--bimar-primary:#2563eb;--bimar-border:#e5e7eb}
-html,body,button,input,textarea,select{font-family:"Vazirmatn",Tahoma,Arial,sans-serif!important}
-body.bimarstop-site{background:var(--bimar-bg);color:var(--bimar-text)}
-body.bimarstop-site a{color:var(--bimar-primary)}
-.bimarstop-theme-picker{position:fixed;left:16px;bottom:16px;z-index:999999;direction:rtl}
-.bimarstop-theme-picker select{border:1px solid var(--bimar-border);background:var(--bimar-surface);color:var(--bimar-text);border-radius:10px;padding:8px 12px;box-shadow:0 4px 18px rgba(0,0,0,.1)}
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@100..900&family=Noto+Sans+Arabic:wght@100..900&family=Cairo:wght@200..1000&family=Tajawal:wght@200..900&family=Amiri:wght@400;700&family=Changa:wght@200..800&family=IBM+Plex+Sans+Arabic:wght@100..700&display=swap');
+body.bimarstop-site{margin:0;transition:background .2s,color .2s}body.bimarstop-site a{transition:color .2s}
+body.bimarstop-light-1{--bimar-bg:#f7f9fc;--bimar-surface:#fff;--bimar-text:#172033;--bimar-muted:#667085;--bimar-primary:#2563eb;--bimar-border:#e5e7eb;font-family:Vazirmatn,Tahoma,sans-serif}
+body.bimarstop-light-2{--bimar-bg:#fffaf2;--bimar-surface:#fff;--bimar-text:#35271d;--bimar-muted:#806b5b;--bimar-primary:#a65f2e;--bimar-border:#ead9c7;font-family:Georgia,'Times New Roman',serif}
+body.bimarstop-light-3{--bimar-bg:#f1f7ff;--bimar-surface:#fff;--bimar-text:#102a43;--bimar-muted:#627d98;--bimar-primary:#0077b6;--bimar-border:#cfe2f3;font-family:'IBM Plex Sans Arabic',Arial,sans-serif}
+body.bimarstop-light-4{--bimar-bg:#f1fbf7;--bimar-surface:#fff;--bimar-text:#15372e;--bimar-muted:#607d74;--bimar-primary:#087f5b;--bimar-border:#cfe9df;font-family:Cairo,Arial,sans-serif}
+body.bimarstop-light-5{--bimar-bg:#fff5fa;--bimar-surface:#fff;--bimar-text:#3b1830;--bimar-muted:#856278;--bimar-primary:#c2185b;--bimar-border:#f0d3e1;font-family:Tajawal,Arial,sans-serif}
+body.bimarstop-light-6{--bimar-bg:#fff8ed;--bimar-surface:#fff;--bimar-text:#392712;--bimar-muted:#7f6b50;--bimar-primary:#c77700;--bimar-border:#efdfc4;font-family:Changa,Arial,sans-serif}
+body.bimarstop-light-7{--bimar-bg:#fafafa;--bimar-surface:#fff;--bimar-text:#242424;--bimar-muted:#737373;--bimar-primary:#404040;--bimar-border:#ddd;font-family:Arial,sans-serif}
+body.bimarstop-light-8{--bimar-bg:#f7f3ff;--bimar-surface:#fff;--bimar-text:#2d2047;--bimar-muted:#76678e;--bimar-primary:#6d28d9;--bimar-border:#e2d8f5;font-family:'Noto Sans Arabic',Arial,sans-serif}
+body.bimarstop-light-9{--bimar-bg:#effafa;--bimar-surface:#fff;--bimar-text:#123536;--bimar-muted:#5d7c7d;--bimar-primary:#0f766e;--bimar-border:#cce7e6;font-family:Arial,sans-serif}
+body.bimarstop-light-10{--bimar-bg:#f4f6f8;--bimar-surface:#fff;--bimar-text:#17202a;--bimar-muted:#66717c;--bimar-primary:#334e68;--bimar-border:#d9e0e6;font-family:'Trebuchet MS',Arial,sans-serif}
+body.bimarstop-dark-1{--bimar-bg:#0f172a;--bimar-surface:#172033;--bimar-text:#f1f5f9;--bimar-muted:#94a3b8;--bimar-primary:#60a5fa;--bimar-border:#334155;font-family:Vazirmatn,Tahoma,sans-serif}
+body.bimarstop-dark-2{--bimar-bg:#17120f;--bimar-surface:#251b15;--bimar-text:#fff7ed;--bimar-muted:#c8a98d;--bimar-primary:#f59e0b;--bimar-border:#4a3320;font-family:Georgia,'Times New Roman',serif}
+body.bimarstop-dark-3{--bimar-bg:#071a2a;--bimar-surface:#0d2940;--bimar-text:#e0f2fe;--bimar-muted:#8eb0c8;--bimar-primary:#38bdf8;--bimar-border:#244b63;font-family:'IBM Plex Sans Arabic',Arial,sans-serif}
+body.bimarstop-dark-4{--bimar-bg:#071c17;--bimar-surface:#0e2923;--bimar-text:#ecfdf5;--bimar-muted:#91b5aa;--bimar-primary:#34d399;--bimar-border:#21483e;font-family:Cairo,Arial,sans-serif}
+body.bimarstop-dark-5{--bimar-bg:#240f1c;--bimar-surface:#341626;--bimar-text:#fff1f7;--bimar-muted:#c99bb0;--bimar-primary:#f472b6;--bimar-border:#5a2942;font-family:Tajawal,Arial,sans-serif}
+body.bimarstop-dark-6{--bimar-bg:#24130c;--bimar-surface:#351c12;--bimar-text:#fff7ed;--bimar-muted:#caa58f;--bimar-primary:#fb7185;--bimar-border:#5c3020;font-family:Changa,Arial,sans-serif}
+body.bimarstop-dark-7{--bimar-bg:#211e0e;--bimar-surface:#302b16;--bimar-text:#fefce8;--bimar-muted:#b7ae80;--bimar-primary:#eab308;--bimar-border:#4d451f;font-family:Arial,sans-serif}
+body.bimarstop-dark-8{--bimar-bg:#1b1430;--bimar-surface:#271d40;--bimar-text:#f5f3ff;--bimar-muted:#a99dc7;--bimar-primary:#a78bfa;--bimar-border:#49356d;font-family:'Noto Sans Arabic',Arial,sans-serif}
+body.bimarstop-dark-9{--bimar-bg:#0a1d1e;--bimar-surface:#102c2d;--bimar-text:#ecfeff;--bimar-muted:#8fb4b5;--bimar-primary:#2dd4bf;--bimar-border:#275354;font-family:Arial,sans-serif}
+body.bimarstop-dark-10{--bimar-bg:#111;--bimar-surface:#1c1c1c;--bimar-text:#f5f5f5;--bimar-muted:#a3a3a3;--bimar-primary:#d4d4d4;--bimar-border:#333;font-family:'Courier New',monospace}
+body.bimarstop-site,body.bimarstop-site button,body.bimarstop-site input,body.bimarstop-site textarea,body.bimarstop-site select{color:var(--bimar-text)}
+body.bimarstop-site{background:var(--bimar-bg)}body.bimarstop-site a{color:var(--bimar-primary)}
+body.bimarstop-site input,body.bimarstop-site textarea,body.bimarstop-site select{background:var(--bimar-surface);border-color:var(--bimar-border)}
