@@ -426,8 +426,8 @@ final class Plugin {
                 row.appendChild(bubble);box.appendChild(row);
             }
             function load(){
-                var f=new FormData();f.append("action","bimarstop_get_messages");f.append("nonce","'+esc_js($nonce)+'");f.append("last_id",last);
-                fetch("'+esc_url($ajax)+'",{method:"POST",body:f}).then(r=>r.json()).then(x=>{
+                var f=new FormData();f.append("action","bimarstop_get_messages");f.append("nonce","'.esc_js($nonce).'");f.append("last_id",last);
+                fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(x=>{
                     if(!x.success)return;x.data.messages.forEach(function(m){render(m);last=Math.max(last,parseInt(m.id));});
                     if(x.data.messages.length)box.scrollTop=box.scrollHeight;
                 });
@@ -438,10 +438,10 @@ final class Plugin {
             function sendMessage(){
                 var value=input.value.trim();
                 if(!value && !file.files.length)return;
-                var f=new FormData();f.append("action","bimarstop_send_message");f.append("nonce","'+esc_js($nonce)+'");f.append("message",value);
+                var f=new FormData();f.append("action","bimarstop_send_message");f.append("nonce","'.esc_js($nonce).'");f.append("message",value);
                 if(file.files[0])f.append("chat_file",file.files[0]);
                 send.disabled=true;send.classList.add("loading");
-                fetch("'+esc_url($ajax)+'",{method:"POST",body:f}).then(r=>r.json()).then(function(x){
+                fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(function(x){
                     send.disabled=false;send.classList.remove("loading");
                     if(x.success){input.value="";clearFile();load();}else{alert((x.data&&x.data.message)?x.data.message:"ارسال پیام ناموفق بود.");}
                 }).catch(function(){send.disabled=false;send.classList.remove("loading");alert("خطا در ارتباط با سرور.");});
@@ -563,9 +563,9 @@ final class Plugin {
         $nonce=wp_create_nonce('bimarstop_private_chat');$ajax=admin_url('admin-ajax.php');
         echo '<script>(function(){var box=document.getElementById("bimarstop-private-box"),input=document.getElementById("bimarstop-private-input"),send=document.getElementById("bimarstop-private-send"),file=document.getElementById("bimarstop-private-file"),att=document.getElementById("bimar-private-attachment"),fn=document.getElementById("bimar-private-file-name"),rm=document.getElementById("bimar-private-file-remove"),last=0;
         function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML;}function render(m){var row=document.createElement("div");row.className="bimar-msg "+(m.mine?"mine":"theirs");var b=document.createElement("div");b.className="bimar-msg-bubble";var s=document.createElement("div");s.className="bimar-msg-sender";s.textContent=m.sender;b.appendChild(s);if(m.message){var x=document.createElement("div");x.className="bimar-msg-text";x.textContent=m.message;b.appendChild(x);}if(m.attachment){var a=document.createElement("a");a.className="bimar-file-card";a.href=m.attachment.url;a.innerHTML="<span class=\"bimar-file-icon\">📎</span><span><b>"+esc(m.attachment.name)+"</b><small>"+esc(m.attachment.size)+"</small></span><strong>دانلود</strong>";b.appendChild(a);}var tm=document.createElement("div");tm.className="bimar-msg-time";tm.textContent=m.time||"";b.appendChild(tm);row.appendChild(b);box.appendChild(row);}
-        function load(){var f=new FormData();f.append("action","bimarstop_private_get_messages");f.append("nonce","'+esc_js($nonce)+'");f.append("thread_id","'.(int)$thread->id.'");f.append("last_id",last);fetch("'+esc_url($ajax)+'",{method:"POST",body:f}).then(r=>r.json()).then(x=>{if(!x.success)return;x.data.messages.forEach(function(m){render(m);last=Math.max(last,parseInt(m.id));});if(x.data.messages.length)box.scrollTop=box.scrollHeight;});}
+        function load(){var f=new FormData();f.append("action","bimarstop_private_get_messages");f.append("nonce","'.esc_js($nonce).'");f.append("thread_id","'.(int)$thread->id.'");f.append("last_id",last);fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(x=>{if(!x.success)return;x.data.messages.forEach(function(m){render(m);last=Math.max(last,parseInt(m.id));});if(x.data.messages.length)box.scrollTop=box.scrollHeight;});}
         function clearFile(){file.value="";att.hidden=true;fn.textContent="";}file.addEventListener("change",function(){if(this.files[0]){fn.textContent=this.files[0].name;att.hidden=false;}});rm.onclick=clearFile;
-        function sendMsg(){var v=input.value.trim();if(!v&&!file.files.length)return;var f=new FormData();f.append("action","bimarstop_private_send_message");f.append("nonce","'+esc_js($nonce)+'");f.append("thread_id","'.(int)$thread->id.'");f.append("message",v);if(file.files[0])f.append("chat_file",file.files[0]);send.disabled=true;fetch("'+esc_url($ajax)+'",{method:"POST",body:f}).then(r=>r.json()).then(function(x){send.disabled=false;if(x.success){input.value="";clearFile();load();}else alert((x.data&&x.data.message)?x.data.message:"ارسال ناموفق بود.");});}
+        function sendMsg(){var v=input.value.trim();if(!v&&!file.files.length)return;var f=new FormData();f.append("action","bimarstop_private_send_message");f.append("nonce","'.esc_js($nonce).'");f.append("thread_id","'.(int)$thread->id.'");f.append("message",v);if(file.files[0])f.append("chat_file",file.files[0]);send.disabled=true;fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(function(x){send.disabled=false;if(x.success){input.value="";clearFile();load();}else alert((x.data&&x.data.message)?x.data.message:"ارسال ناموفق بود.");});}
         send.onclick=sendMsg;input.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg();}});load();setInterval(load,4000);})();</script>';
     }
 
