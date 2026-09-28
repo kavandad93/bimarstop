@@ -694,11 +694,14 @@ final class Plugin {
                 send=document.getElementById("bimarstop-send"), file=document.getElementById("bimarstop-chat-file"),
                 attachment=document.getElementById("bimar-chat-attachment"), fileName=document.getElementById("bimar-file-name"),
                 docSelect=document.getElementById("bimarstop-chat-document"),
-                remove=document.getElementById("bimar-file-remove"), last=0;
+                remove=document.getElementById("bimar-file-remove"), last=0, loading=false, seen={};
             if(!box||!input||!send)return;
             function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML;}
             function render(m){
-                var row=document.createElement("div"); row.className="bimar-msg "+(m.mine?"mine":"theirs");
+                var id=String(m.id);
+                if(seen[id] || document.querySelector('[data-message-id="'+id+'"]'))return;
+                seen[id]=true;
+                var row=document.createElement("div"); row.className="bimar-msg "+(m.mine?"mine":"theirs"); row.setAttribute("data-message-id",id);
                 var bubble=document.createElement("div"); bubble.className="bimar-msg-bubble";
                 var sender=document.createElement("div"); sender.className="bimar-msg-sender"; sender.textContent=m.sender;
                 bubble.appendChild(sender);
@@ -708,11 +711,14 @@ final class Plugin {
                 row.appendChild(bubble);box.appendChild(row);
             }
             function load(){
+                if(loading)return;
+                loading=true;
                 var f=new FormData();f.append("action","bimarstop_get_messages");f.append("nonce","'.esc_js($nonce).'");f.append("last_id",last);
                 fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(x=>{
-                    if(!x.success)return;x.data.messages.forEach(function(m){render(m);last=Math.max(last,parseInt(m.id));});
+                    if(!x.success)return;
+                    x.data.messages.forEach(function(m){render(m);last=Math.max(last,parseInt(m.id)||0);});
                     if(x.data.messages.length)box.scrollTop=box.scrollHeight;
-                });
+                }).catch(function(){}).finally(function(){loading=false;});
             }
             function clearFile(){file.value="";attachment.hidden=true;fileName.textContent="";}
             file.addEventListener("change",function(){if(this.files[0]){fileName.textContent=this.files[0].name;attachment.hidden=false;}});
