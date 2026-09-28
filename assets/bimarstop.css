@@ -23,3 +23,123 @@ body.bimarstop-dark-10{--bimar-bg:#111;--bimar-surface:#1c1c1c;--bimar-text:#f5f
 body.bimarstop-site,body.bimarstop-site button,body.bimarstop-site input,body.bimarstop-site textarea,body.bimarstop-site select{color:var(--bimar-text)}
 body.bimarstop-site{background:var(--bimar-bg)}body.bimarstop-site a{color:var(--bimar-primary)}
 body.bimarstop-site input,body.bimarstop-site textarea,body.bimarstop-site select{background:var(--bimar-surface);border-color:var(--bimar-border)}
+
+
+/* ───────── Authentication UI ───────── */
+body.bimarstop-site:has(#bs-login-mobile),
+body.bimarstop-site:has(#bimarstop-register-mobile){
+    min-height:100vh;
+    background:
+        radial-gradient(circle at 15% 15%, color-mix(in srgb,var(--bimar-primary) 12%,transparent), transparent 32%),
+        radial-gradient(circle at 85% 85%, color-mix(in srgb,var(--bimar-primary) 10%,transparent), transparent 35%),
+        var(--bimar-bg);
+}
+body.bimarstop-site:has(#bs-login-mobile) > *,
+body.bimarstop-site:has(#bimarstop-register-mobile) > *{
+    box-sizing:border-box;
+}
+.bimarstop-auth-card{
+    position:relative;
+    width:min(440px,calc(100vw - 32px));
+    margin:7vh auto 40px;
+    padding:38px 34px 30px;
+    background:color-mix(in srgb,var(--bimar-surface) 94%,transparent);
+    border:1px solid color-mix(in srgb,var(--bimar-border) 80%,transparent);
+    border-radius:28px;
+    box-shadow:0 24px 70px rgba(15,23,42,.12);
+    backdrop-filter:blur(18px);
+    text-align:right;
+    overflow:hidden;
+}
+.bimarstop-auth-card:before{
+    content:"";
+    position:absolute;
+    inset:0 0 auto;
+    height:5px;
+    background:var(--bimar-primary);
+}
+.bimarstop-auth-brand{
+    display:flex;
+    align-items:center;
+    gap:13px;
+    margin-bottom:25px;
+}
+.bimarstop-auth-logo{
+    width:48px;height:48px;flex:0 0 48px;
+    display:grid;place-items:center;
+    border-radius:15px;
+    background:var(--bimar-primary);
+    color:#fff;
+    font-size:24px;
+    box-shadow:0 9px 24px color-mix(in srgb,var(--bimar-primary) 30%,transparent);
+}
+.bimarstop-auth-title{margin:0;font-size:24px;font-weight:800;color:var(--bimar-text);letter-spacing:-.5px}
+.bimarstop-auth-subtitle{margin:4px 0 0;color:var(--bimar-muted);font-size:13px;line-height:1.8}
+.bimarstop-auth-label{display:block;margin:0 0 8px;font-size:13px;font-weight:700;color:var(--bimar-text)}
+.bimarstop-auth-field{
+    width:100%!important;
+    min-height:54px!important;
+    padding:0 16px!important;
+    border:1px solid var(--bimar-border)!important;
+    border-radius:14px!important;
+    background:var(--bimar-surface)!important;
+    color:var(--bimar-text)!important;
+    font:inherit!important;
+    font-size:15px!important;
+    outline:none!important;
+    box-shadow:none!important;
+    transition:.2s ease!important;
+}
+.bimarstop-auth-field:focus{
+    border-color:var(--bimar-primary)!important;
+    box-shadow:0 0 0 4px color-mix(in srgb,var(--bimar-primary) 13%,transparent)!important;
+}
+.bimarstop-auth-btn{
+    width:100%!important;
+    min-height:54px!important;
+    margin-top:14px!important;
+    border:0!important;
+    border-radius:14px!important;
+    background:var(--bimar-primary)!important;
+    color:#fff!important;
+    font:inherit!important;
+    font-weight:750!important;
+    cursor:pointer!important;
+    transition:transform .15s ease,filter .15s ease,box-shadow .15s ease!important;
+    box-shadow:0 10px 24px color-mix(in srgb,var(--bimar-primary) 24%,transparent)!important;
+}
+.bimarstop-auth-btn:hover{filter:brightness(.96);transform:translateY(-1px)}
+.bimarstop-auth-btn:active{transform:translateY(0)}
+.bimarstop-auth-status{
+    min-height:22px;
+    margin-top:14px;
+    padding:0 4px;
+    color:var(--bimar-muted);
+    font-size:13px;
+    line-height:1.8;
+}
+.bimarstop-auth-otp{
+    margin-top:20px;
+    padding-top:20px;
+    border-top:1px solid var(--bimar-border);
+    animation:bimarstopAuthIn .25s ease;
+}
+.bimarstop-auth-hint{
+    margin:0 0 10px;
+    color:var(--bimar-muted);
+    font-size:12px;
+}
+.bimarstop-auth-footer{
+    margin:24px 0 0;
+    padding-top:18px;
+    border-top:1px solid var(--bimar-border);
+    color:var(--bimar-muted);
+    font-size:12px;
+    text-align:center;
+}
+.bimarstop-auth-footer a{font-weight:700;text-decoration:none}
+@keyframes bimarstopAuthIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media(max-width:520px){
+    .bimarstop-auth-card{margin:18px auto 25px;padding:30px 22px 24px;border-radius:23px}
+    .bimarstop-auth-title{font-size:21px}
+}
