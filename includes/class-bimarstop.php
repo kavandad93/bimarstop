@@ -30,6 +30,8 @@ final class Plugin {
         add_filter('login_url', [$this, 'bimarstop_login_url'], 10, 3);
         add_action('user_new_form', [$this, 'admin_new_user_mobile_field']);
         add_action('user_profile_update_errors', [$this, 'validate_admin_mobile_field'], 10, 3);
+        add_action('personal_options_update', [$this, 'save_admin_mobile_field']);
+        add_action('edit_user_profile_update', [$this, 'save_admin_mobile_field']);
         add_action('user_register', [$this, 'save_admin_mobile_field']);
         add_filter('option_users_can_register', '__return_false');
         add_action('wp_ajax_bimarstop_send_message', [$this, 'ajax_send_message']);
@@ -1178,7 +1180,7 @@ final class Plugin {
 
     public function admin_new_user_mobile_field($form_type): void {
         if($form_type!=='add-new-user') return;
-        ?><script>(function(){document.addEventListener('DOMContentLoaded',function(){var e=document.getElementById('email');if(e){e.required=false;e.closest('tr')&&(e.closest('tr').style.display='none');var t=document.createElement('tr');t.innerHTML='<th><label for="bimarstop_admin_mobile">شماره موبایل</label></th><td><input name="bimarstop_admin_mobile" id="bimarstop_admin_mobile" type="tel" class="regular-text" required placeholder="09123456789"><p class="description">برای ورود پیامکی استفاده می‌شود.</p></td>';e.closest('tr').parentNode.insertBefore(t,e.closest('tr'));}});})();</script><?php
+        ?><script>(function(){document.addEventListener('DOMContentLoaded',function(){var e=document.getElementById('email');if(e){e.required=false;e.value='';e.closest('tr')&&(e.closest('tr').style.display='none');var t=document.createElement('tr');t.innerHTML='<th><label for="bimarstop_admin_mobile">شماره موبایل</label></th><td><input name="bimarstop_admin_mobile" id="bimarstop_admin_mobile" type="tel" class="regular-text" required placeholder="09123456789"><p class="description">برای ورود پیامکی استفاده می‌شود.</p></td>';e.closest('tr').parentNode.insertBefore(t,e.closest('tr'));var p=document.getElementById('bimarstop_admin_mobile');if(p){p.addEventListener('input',function(){e.value=p.value.replace(/\D/g,'')+'@bimarstop.local';});p.form.addEventListener('submit',function(){e.value=p.value.replace(/\D/g,'')+'@bimarstop.local';});}}});})();</script><?php
     }
 
     public function validate_admin_mobile_field($errors,$update,$user): void {
