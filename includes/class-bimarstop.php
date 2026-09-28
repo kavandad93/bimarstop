@@ -694,7 +694,7 @@ final class Plugin {
             function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML;}
             function render(m){
                 var id=String(m.id);
-                if(seen[id] || document.querySelector('[data-message-id="'+id+'"]'))return;
+                if(seen[id] || document.querySelector("[data-message-id=\""+id+"\"]"))return;
                 seen[id]=true;
                 var row=document.createElement("div"); row.className="bimar-msg "+(m.mine?"mine":"theirs"); row.setAttribute("data-message-id",id);
                 var bubble=document.createElement("div"); bubble.className="bimar-msg-bubble";
