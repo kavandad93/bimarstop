@@ -25,8 +25,6 @@ final class Plugin {
         add_shortcode('bimarstop_auth', [$this, 'auth_shortcode']);
         add_action('wp_ajax_nopriv_bimarstop_send_otp', [$this, 'ajax_send_otp']);
         add_action('wp_ajax_nopriv_bimarstop_verify_otp', [$this, 'ajax_verify_otp']);
-        add_action('wp_ajax_nopriv_bimarstop_send_login_otp', [$this, 'ajax_send_login_otp']);
-        add_action('wp_ajax_nopriv_bimarstop_verify_login_otp', [$this, 'ajax_verify_login_otp']);
         add_action('wp_ajax_nopriv_bimarstop_send_auth_otp', [$this, 'ajax_send_auth_otp']);
         add_action('wp_ajax_nopriv_bimarstop_verify_auth_otp', [$this, 'ajax_verify_auth_otp']);
         add_action('login_init', [$this, 'redirect_wp_login']);
