@@ -21,8 +21,16 @@ final class Plugin {
         add_action('admin_enqueue_scripts', [$this, 'admin_assets']);
         add_action('init', [$this, 'register_roles']);
         add_shortcode('bimarstop_register', [$this, 'registration_shortcode']);
+        add_shortcode('bimarstop_login', [$this, 'login_shortcode']);
         add_action('wp_ajax_nopriv_bimarstop_send_otp', [$this, 'ajax_send_otp']);
         add_action('wp_ajax_nopriv_bimarstop_verify_otp', [$this, 'ajax_verify_otp']);
+        add_action('wp_ajax_nopriv_bimarstop_send_login_otp', [$this, 'ajax_send_login_otp']);
+        add_action('wp_ajax_nopriv_bimarstop_verify_login_otp', [$this, 'ajax_verify_login_otp']);
+        add_action('login_init', [$this, 'redirect_wp_login']);
+        add_filter('login_url', [$this, 'bimarstop_login_url'], 10, 3);
+        add_action('user_new_form', [$this, 'admin_new_user_mobile_field']);
+        add_action('user_profile_update_errors', [$this, 'validate_admin_mobile_field'], 10, 3);
+        add_action('user_register', [$this, 'save_admin_mobile_field']);
         add_filter('option_users_can_register', '__return_false');
         add_action('wp_ajax_bimarstop_send_message', [$this, 'ajax_send_message']);
         add_action('wp_ajax_bimarstop_get_messages', [$this, 'ajax_get_messages']);
@@ -58,6 +66,7 @@ final class Plugin {
         self::create_private_chat_tables();
         self::create_report_and_document_tables();
         $this->ensure_registration_page();
+        $this->ensure_login_page();
     }
 
     private function ensure_registration_page(): void {
@@ -70,6 +79,11 @@ final class Plugin {
             'post_status' => 'publish',
             'post_type' => 'page',
         ]);
+    }
+
+    private function ensure_login_page(): void {
+        $page=get_page_by_path('bimarstop-login',OBJECT,'page');
+        if(!$page){ wp_insert_post(['post_title'=>'ورود به BimarStop','post_name'=>'bimarstop-login','post_content'=>'[bimarstop_login]','post_status'=>'publish','post_type'=>'page']); flush_rewrite_rules(false); }
     }
 
     private static function register_bimarstop_roles(): void {
@@ -86,12 +100,19 @@ final class Plugin {
     }
 
     public function require_login(): void {
+        if ((is_front_page() || is_home()) && !is_admin()) { wp_redirect(admin_url(), 301); exit; }
         if (is_user_logged_in() || is_admin() || wp_doing_ajax() || (defined('REST_REQUEST') && REST_REQUEST)) return;
-        if (is_page('bimarstop-register')) return;
-        $login_url = function_exists('wp_login_url') ? wp_login_url(home_url('/')) : wp_login_url();
-        wp_safe_redirect($login_url);
-        exit;
+        if (is_page('bimarstop-register') || is_page('bimarstop-login')) return;
+        wp_safe_redirect(home_url('/bimarstop-login/')); exit;
     }
+
+    public function redirect_wp_login(): void {
+        if(isset($_GET['action']) && $_GET['action']==='logout') return;
+        if(is_user_logged_in()){ wp_safe_redirect(admin_url()); exit; }
+        wp_safe_redirect(home_url('/bimarstop-login/')); exit;
+    }
+
+    public function bimarstop_login_url($login_url,$redirect='',$force_reauth=false): string { return home_url('/bimarstop-login/'); }
 
     public function show_admin_bar($show): bool {
         return is_user_logged_in() ? (bool) $show : false;
@@ -1102,38 +1123,79 @@ final class Plugin {
         ]);
         if ($existing) wp_send_json_error(['message'=>'این شماره موبایل قبلاً ثبت‌نام شده است.']);
 
-        $code = (string) wp_rand(100000, 999999);
-        set_transient('bimarstop_otp_' . md5($mobile), wp_hash($code . '|' . $mobile), 5 * MINUTE_IN_SECONDS);
-        set_transient('bimarstop_otp_rate_' . md5($mobile), 1, MINUTE_IN_SECONDS);
-
-        $message_text = "سلام، به بیماراستاپ خوش آمدید\nرمز شما: {$code} میباشد.\n#{$code}";
-        $response = wp_remote_post('https://api.sms.ir/v1/send/bulk', [
-            'timeout' => 15,
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json',
-                'X-API-KEY' => $settings['sms_api_key'],
-            ],
-            'body' => wp_json_encode([
-                'LineNumber' => $settings['sms_line_number'],
-                'MessageText' => $message_text,
-                'Mobiles' => [$mobile],
-            ]),
-        ]);
-
-        if (is_wp_error($response)) {
-            delete_transient('bimarstop_otp_' . md5($mobile));
-            wp_send_json_error(['message'=>'ارتباط با سرویس پیامک برقرار نشد.']);
-        }
-
-        $status = wp_remote_retrieve_response_code($response);
-        $body = json_decode(wp_remote_retrieve_body($response), true);
-        if ($status < 200 || $status >= 300 || (is_array($body) && isset($body['status']) && !$body['status'])) {
-            delete_transient('bimarstop_otp_' . md5($mobile));
-            wp_send_json_error(['message'=>'ارسال پیامک ناموفق بود.']);
-        }
-
+        $this->send_plain_otp($mobile);
         wp_send_json_success(['message'=>'کد تأیید ارسال شد.']);
+    }
+
+    public function login_shortcode(): string {
+        if(is_user_logged_in()){ return '<script>location.href='.wp_json_encode(admin_url()).';</script>'; }
+        $ajax=admin_url('admin-ajax.php'); $nonce=wp_create_nonce('bimarstop_login');
+        ob_start(); ?>
+        <div dir="rtl" style="max-width:480px;margin:30px auto;padding:24px;border:1px solid #ddd;border-radius:16px">
+        <h2>ورود به BimarStop</h2><p>ورود با شماره موبایل و کد تأیید پیامکی.</p>
+        <input id="bs-login-mobile" type="tel" inputmode="numeric" placeholder="09123456789" style="width:100%">
+        <button type="button" id="bs-login-send">دریافت کد ورود</button>
+        <div id="bs-login-otp" style="display:none"><input id="bs-login-code" maxlength="6" inputmode="numeric" placeholder="کد ۶ رقمی" style="width:100%"><button type="button" id="bs-login-verify">ورود</button></div>
+        <div id="bs-login-status"></div></div>
+        <script>(function(){var a=<?php echo wp_json_encode($ajax); ?>,n=<?php echo wp_json_encode($nonce); ?>,m=document.getElementById('bs-login-mobile'),c=document.getElementById('bs-login-code'),w=document.getElementById('bs-login-otp'),s=document.getElementById('bs-login-status');function f(x,y){var q=new FormData();q.append('action',x);q.append('nonce',n);q.append('mobile',m.value);if(y)q.append('code',c.value);fetch(a,{method:'POST',body:q}).then(r=>r.json()).then(function(z){if(z.success){if(y)location.href=z.data.redirect;else{w.style.display='block';s.textContent='کد ورود ارسال شد.';c.focus();}}else s.textContent=z.data&&z.data.message||'خطا';});}document.getElementById('bs-login-send').onclick=function(){f('bimarstop_send_login_otp',false)};document.getElementById('bs-login-verify').onclick=function(){f('bimarstop_verify_login_otp',true)};})();</script>
+        <?php return ob_get_clean();
+    }
+
+    public function ajax_send_login_otp(): void {
+        check_ajax_referer('bimarstop_login','nonce');
+        $mobile=$this->normalize_mobile(sanitize_text_field(wp_unslash($_POST['mobile']??'')));
+        if(!$this->valid_mobile($mobile)) wp_send_json_error(['message'=>'شماره موبایل معتبر نیست.']);
+        $users=get_users(['meta_key'=>'bimarstop_mobile','meta_value'=>$mobile,'number'=>1,'fields'=>'ID']);
+        if(!$users) wp_send_json_error(['message'=>'حسابی با این شماره موبایل پیدا نشد.']);
+        $this->send_plain_otp($mobile);
+    }
+
+    private function send_plain_otp(string $mobile): void {
+        $settings=wp_parse_args(get_option('bimarstop_settings',[]),['sms_api_key'=>'','sms_line_number'=>'']);
+        if(empty($settings['sms_api_key'])||empty($settings['sms_line_number'])) wp_send_json_error(['message'=>'تنظیمات SMS.ir هنوز تکمیل نشده است.']);
+        if(get_transient('bimarstop_otp_rate_'.md5($mobile))) wp_send_json_error(['message'=>'لطفاً کمی صبر کنید و دوباره تلاش کنید.']);
+        $code=(string)wp_rand(100000,999999);
+        set_transient('bimarstop_otp_'.md5($mobile),wp_hash($code.'|'.$mobile),5*MINUTE_IN_SECONDS);
+        set_transient('bimarstop_otp_rate_'.md5($mobile),1,MINUTE_IN_SECONDS);
+        $response=wp_remote_post('https://api.sms.ir/v1/send/bulk',['timeout'=>15,'headers'=>['Content-Type'=>'application/json','Accept'=>'application/json','X-API-KEY'=>$settings['sms_api_key']],'body'=>wp_json_encode(['LineNumber'=>$settings['sms_line_number'],'MessageText'=>"سلام، به بیماراستاپ خوش آمدید\nرمز شما: {$code} میباشد.\n#{$code}",'Mobiles'=>[$mobile]])]);
+        if(is_wp_error($response)){delete_transient('bimarstop_otp_'.md5($mobile));wp_send_json_error(['message'=>'ارتباط با سرویس پیامک برقرار نشد.']);}
+        $status=wp_remote_retrieve_response_code($response);$body=json_decode(wp_remote_retrieve_body($response),true);
+        if($status<200||$status>=300||(is_array($body)&&isset($body['status'])&&!$body['status'])){delete_transient('bimarstop_otp_'.md5($mobile));wp_send_json_error(['message'=>'ارسال پیامک ناموفق بود.']);}
+        wp_send_json_success(['message'=>'کد تأیید ارسال شد.']);
+    }
+
+    public function ajax_verify_login_otp(): void {
+        check_ajax_referer('bimarstop_login','nonce');
+        $mobile=$this->normalize_mobile(sanitize_text_field(wp_unslash($_POST['mobile']??''))); $code=preg_replace('/\D+/','',(string)wp_unslash($_POST['code']??''));
+        $stored=get_transient('bimarstop_otp_'.md5($mobile));
+        if(!$this->valid_mobile($mobile)||strlen($code)!==6||!$stored||!wp_hash_equals($stored,wp_hash($code.'|'.$mobile))) wp_send_json_error(['message'=>'کد تأیید نادرست یا منقضی شده است.']);
+        $users=get_users(['meta_key'=>'bimarstop_mobile','meta_value'=>$mobile,'number'=>1,'fields'=>'ID']);
+        if(!$users) wp_send_json_error(['message'=>'حسابی با این شماره موبایل پیدا نشد.']);
+        delete_transient('bimarstop_otp_'.md5($mobile)); delete_transient('bimarstop_otp_rate_'.md5($mobile));
+        wp_set_auth_cookie((int)$users[0],true,is_ssl()); wp_set_current_user((int)$users[0]);
+        wp_send_json_success(['redirect'=>admin_url()]);
+    }
+
+    public function admin_new_user_mobile_field($form_type): void {
+        if($form_type!=='add-new-user') return;
+        ?><script>(function(){document.addEventListener('DOMContentLoaded',function(){var e=document.getElementById('email');if(e){e.required=false;e.closest('tr')&&(e.closest('tr').style.display='none');var t=document.createElement('tr');t.innerHTML='<th><label for="bimarstop_admin_mobile">شماره موبایل</label></th><td><input name="bimarstop_admin_mobile" id="bimarstop_admin_mobile" type="tel" class="regular-text" required placeholder="09123456789"><p class="description">برای ورود پیامکی استفاده می‌شود.</p></td>';e.closest('tr').parentNode.insertBefore(t,e.closest('tr'));}});})();</script><?php
+    }
+
+    public function validate_admin_mobile_field($errors,$update,$user): void {
+        if(!$update && isset($_POST['bimarstop_admin_mobile'])){
+            $mobile=$this->normalize_mobile(sanitize_text_field(wp_unslash($_POST['bimarstop_admin_mobile'])));
+            if(!$this->valid_mobile($mobile)) $errors->add('bimarstop_mobile','شماره موبایل معتبر نیست.');
+            $exists=get_users(['meta_key'=>'bimarstop_mobile','meta_value'=>$mobile,'number'=>1,'exclude'=>[$user->ID??0],'fields'=>'ID']);
+            if($exists) $errors->add('bimarstop_mobile_exists','این شماره موبایل قبلاً استفاده شده است.');
+        }
+    }
+
+    public function save_admin_mobile_field($user_id): void {
+        if(!isset($_POST['bimarstop_admin_mobile'])) return;
+        $mobile=$this->normalize_mobile(sanitize_text_field(wp_unslash($_POST['bimarstop_admin_mobile'])));
+        if(!$this->valid_mobile($mobile)) return;
+        update_user_meta($user_id,'bimarstop_mobile',$mobile);
+        wp_update_user(['ID'=>$user_id,'user_email'=>$mobile.'@bimarstop.local']);
     }
 
     public function ajax_verify_otp(): void {
