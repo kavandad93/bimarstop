@@ -689,6 +689,8 @@ final class Plugin {
         $ajax=admin_url('admin-ajax.php');
         echo '<script>
         (function(){
+            if(window.__bimarstopChatInitialized)return;
+            window.__bimarstopChatInitialized=true;
             var box=document.getElementById("bimarstop-chat-box"), input=document.getElementById("bimarstop-chat-input"),
                 send=document.getElementById("bimarstop-send"), file=document.getElementById("bimarstop-chat-file"),
                 attachment=document.getElementById("bimar-chat-attachment"), fileName=document.getElementById("bimar-file-name"),
@@ -730,7 +732,7 @@ final class Plugin {
                 send.disabled=true;send.classList.add("loading");
                 fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(function(x){
                     send.disabled=false;send.classList.remove("loading");
-                    if(x.success){input.value="";clearFile();if(x.data&&x.data.message_id){last=Math.max(last,parseInt(x.data.message_id)||0);sent[String(x.data.message_id)]=true;}load();}else{alert((x.data&&x.data.message)?x.data.message:"ارسال پیام ناموفق بود.");}
+                    if(x.success){input.value="";clearFile();load();}else{alert((x.data&&x.data.message)?x.data.message:"ارسال پیام ناموفق بود.");}
                 }).catch(function(){send.disabled=false;send.classList.remove("loading");alert("خطا در ارتباط با سرور.");});
             }
             send.onclick=sendMessage;
@@ -791,7 +793,7 @@ final class Plugin {
             $path=$upload['file'];$name=sanitize_file_name($_FILES['chat_file']['name']);$size=(int)$_FILES['chat_file']['size'];$type=$upload['type'];
         }
         if($msg==='' && !$path) wp_send_json_error(['message'=>'پیام یا فایل وارد کنید.']);
-        if($wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}bimarstop_chat_messages WHERE thread_id=%d AND sender_id=%d AND message=%s AND attachment_path=%s AND created_at >= %s LIMIT 1",$thread->id,$uid,$msg,$path,current_time('mysql',time()-8)))) {
+        if($wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}bimarstop_chat_messages WHERE thread_id=%d AND sender_id=%d AND message=%s AND attachment_path=%s AND created_at >= %s LIMIT 1",$thread->id,$uid,$msg,$path,wp_date('Y-m-d H:i:s', current_time('timestamp')-8)))) {
             wp_send_json_error(['message'=>'پیام تکراری است.']);
         }
         $wpdb->insert($wpdb->prefix.'bimarstop_chat_messages',['thread_id'=>$thread->id,'sender_id'=>$uid,'message'=>$msg,'attachment_path'=>$path,'attachment_name'=>$name,'attachment_size'=>$size,'attachment_type'=>$type,'created_at'=>current_time('mysql')],['%d','%d','%s','%s','%s','%d','%s','%s']);
@@ -1212,9 +1214,23 @@ final class Plugin {
         check_ajax_referer('bimarstop_chat','nonce');
         global $wpdb; $id=absint($_POST['folder_id']??0); $table=$wpdb->prefix.'bimarstop_document_categories';
         if(!$id) wp_send_json_error(['message'=>'پوشه نامعتبر است.']);
-        $children=(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE parent_id=%d",$id));
-        $docs=(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}bimarstop_documents WHERE category_id=%d",$id));
-        if($children||$docs) wp_send_json_error(['message'=>'پوشه خالی نیست. ابتدا فایل‌ها و زیرپوشه‌ها را جابه‌جا یا حذف کنید.']);
+        // حذف پوشه فقط دسته‌بندی را حذف می‌کند؛ فایل‌ها باقی می‌مانند.
+        // فایل‌های داخل این پوشه به حالت «بدون پوشه» منتقل می‌شوند و
+        // زیرپوشه‌ها نیز به ریشه منتقل می‌شوند.
+        $wpdb->update(
+            $wpdb->prefix.'bimarstop_documents',
+            ['category_id'=>0],
+            ['category_id'=>$id],
+            ['%d'],
+            ['%d']
+        );
+        $wpdb->update(
+            $table,
+            ['parent_id'=>0],
+            ['parent_id'=>$id],
+            ['%d'],
+            ['%d']
+        );
         if(!$wpdb->delete($table,['id'=>$id],['%d'])) wp_send_json_error(['message'=>'حذف پوشه ناموفق بود.']);
         wp_send_json_success();
     }
