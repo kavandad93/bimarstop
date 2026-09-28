@@ -1024,7 +1024,7 @@ final class Plugin {
         }
 
         $received=$wpdb->get_results($wpdb->prepare("SELECT s.*,d.name,d.size,d.type,u.display_name AS sender_name FROM $st s JOIN $dt d ON d.id=s.document_id LEFT JOIN {$wpdb->users} u ON u.ID=s.sender_id WHERE s.recipient_id=%d ORDER BY s.id DESC",$uid));
-        $rows=$manager?$wpdb->get_results("SELECT d.*,COALESCE(c.name,'عمومی') AS category_name FROM $dt d LEFT JOIN $ct c ON c.id=d.category_id ORDER BY d.name ASC"):[];
+        $rows=$manager?$wpdb->get_results("SELECT d.*,COALESCE(c.name,'عمومی') AS category_name FROM $dt d LEFT JOIN $ct c ON c.id=d.category_id WHERE d.hidden=0 ORDER BY d.name ASC"):[];
 
         $children=[];
         foreach($cats as $cat) $children[(int)$cat->parent_id][]=$cat;
@@ -1226,7 +1226,7 @@ final class Plugin {
         check_ajax_referer('bimarstop_chat','nonce');
         if(!$this->can_use_documents()) wp_send_json_error(['message'=>'دسترسی ندارید.']);
         global $wpdb; $this->sync_documents();
-        $rows=$wpdb->get_results("SELECT d.id,d.name,d.size,d.type,c.name AS category_name FROM {$wpdb->prefix}bimarstop_documents d LEFT JOIN {$wpdb->prefix}bimarstop_document_categories c ON c.id=d.category_id ORDER BY c.name ASC,d.name ASC");
+        $rows=$wpdb->get_results("SELECT d.id,d.name,d.size,d.type,c.name AS category_name FROM {$wpdb->prefix}bimarstop_documents d LEFT JOIN {$wpdb->prefix}bimarstop_document_categories c ON c.id=d.category_id WHERE d.hidden=0 ORDER BY c.name ASC,d.name ASC");
         $out=[]; foreach($rows as $r)$out[]=['id'=>(int)$r->id,'name'=>$r->name,'size'=>size_format((int)$r->size),'category'=>$r->category_name?:'عمومی'];
         wp_send_json_success(['documents'=>$out]);
     }
