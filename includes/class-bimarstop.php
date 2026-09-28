@@ -1394,7 +1394,8 @@ final class Plugin {
             wp_set_auth_cookie($user_id,true,is_ssl());
 
             $stage = 'ارسال پاسخ';
-            wp_send_json_success(['redirect'=>admin_url()]);
+            $redirect=$this->profile_is_complete($user_id)?admin_url():home_url('/bimarstop-complete-profile/');
+            wp_send_json_success(['redirect'=>$redirect]);
         } catch (\Throwable $e) {
             error_log('[BimarStop OTP] '.$stage.' | '.$e->getMessage().' in '.$e->getFile().':'.$e->getLine());
             wp_send_json_error([
