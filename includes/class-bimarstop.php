@@ -1052,7 +1052,7 @@ final class Plugin {
             return '<script>location.href=' . wp_json_encode(admin_url()) . ';</script>';
         }
 
-        $ajax = admin_url('admin-ajax.php', is_ssl() ? 'https' : 'http');
+        $ajax = home_url('/wp-admin/admin-ajax.php');
         $nonce = wp_create_nonce('bimarstop_auth');
 
         ob_start(); ?>
@@ -1105,8 +1105,8 @@ final class Plugin {
                 var data;
                 try { data=JSON.parse(text); }
                 catch(e) {
-                    console.error('BimarStop AJAX response:',text);
-                    throw new Error('invalid_json');
+                    console.error('BimarStop AJAX response:', response.status, text);
+                    throw new Error('server_response_' + response.status);
                 }
                 return data;
             }
@@ -1125,7 +1125,8 @@ final class Plugin {
                         message((result.data&&result.data.message)||'ارسال کد ناموفق بود.');
                     }
                 } catch(e) {
-                    message('خطا در ارتباط با سرور. لطفاً دوباره تلاش کنید.');
+                    console.error('BimarStop send OTP error:', e);
+                    message(e.message === 'server_response_403' ? 'دسترسی به سرور رد شد (403).' : e.message === 'server_response_500' ? 'خطای داخلی سرور (500).' : 'خطا در ارتباط با سرور. لطفاً دوباره تلاش کنید.');
                 } finally {
                     send.disabled=false;
                 }
