@@ -1052,7 +1052,7 @@ final class Plugin {
             return '<script>location.href=' . wp_json_encode(admin_url()) . ';</script>';
         }
 
-        $ajax = admin_url('admin-ajax.php');
+        $ajax = admin_url('admin-ajax.php', is_ssl() ? 'https' : 'http');
         $nonce = wp_create_nonce('bimarstop_auth');
 
         ob_start(); ?>
@@ -1100,7 +1100,7 @@ final class Plugin {
                 form.append('mobile',mobile.value);
                 if(includeCode) form.append('code',code.value);
 
-                var response=await fetch(ajax,{method:'POST',body:form,credentials:'same-origin'});
+                var response=await fetch(ajax,{method:'POST',body:form,credentials:'same-origin',headers:{'Accept':'application/json'}});
                 var text=await response.text();
                 var data;
                 try { data=JSON.parse(text); }
@@ -1150,7 +1150,7 @@ final class Plugin {
             };
 
             code.addEventListener('input',function(){
-                this.value=this.value.replace(/\\D/g,'').slice(0,6);
+                this.value=this.value.replace(/\D/g,'').slice(0,6);
             });
             mobile.addEventListener('keydown',function(e){ if(e.key==='Enter') send.click(); });
             code.addEventListener('keydown',function(e){ if(e.key==='Enter') verify.click(); });
