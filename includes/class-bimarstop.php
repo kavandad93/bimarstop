@@ -693,6 +693,7 @@ final class Plugin {
             var box=document.getElementById("bimarstop-chat-box"), input=document.getElementById("bimarstop-chat-input"),
                 send=document.getElementById("bimarstop-send"), file=document.getElementById("bimarstop-chat-file"),
                 attachment=document.getElementById("bimar-chat-attachment"), fileName=document.getElementById("bimar-file-name"),
+                docSelect=document.getElementById("bimarstop-chat-document"),
                 remove=document.getElementById("bimar-file-remove"), last=0;
             if(!box||!input||!send)return;
             function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML;}
