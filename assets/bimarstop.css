@@ -24,122 +24,31 @@ body.bimarstop-site,body.bimarstop-site button,body.bimarstop-site input,body.bi
 body.bimarstop-site{background:var(--bimar-bg)}body.bimarstop-site a{color:var(--bimar-primary)}
 body.bimarstop-site input,body.bimarstop-site textarea,body.bimarstop-site select{background:var(--bimar-surface);border-color:var(--bimar-border)}
 
-
-/* ───────── Authentication UI ───────── */
-body.bimarstop-site:has(#bs-login-mobile),
-body.bimarstop-site:has(#bimarstop-register-mobile){
-    min-height:100vh;
-    background:
-        radial-gradient(circle at 15% 15%, color-mix(in srgb,var(--bimar-primary) 12%,transparent), transparent 32%),
-        radial-gradient(circle at 85% 85%, color-mix(in srgb,var(--bimar-primary) 10%,transparent), transparent 35%),
-        var(--bimar-bg);
-}
-body.bimarstop-site:has(#bs-login-mobile) > *,
-body.bimarstop-site:has(#bimarstop-register-mobile) > *{
-    box-sizing:border-box;
-}
-.bimarstop-auth-card{
-    position:relative;
-    width:min(440px,calc(100vw - 32px));
-    margin:7vh auto 40px;
-    padding:38px 34px 30px;
-    background:color-mix(in srgb,var(--bimar-surface) 94%,transparent);
-    border:1px solid color-mix(in srgb,var(--bimar-border) 80%,transparent);
-    border-radius:28px;
-    box-shadow:0 24px 70px rgba(15,23,42,.12);
-    backdrop-filter:blur(18px);
-    text-align:right;
-    overflow:hidden;
-}
-.bimarstop-auth-card:before{
-    content:"";
-    position:absolute;
-    inset:0 0 auto;
-    height:5px;
-    background:var(--bimar-primary);
-}
-.bimarstop-auth-brand{
-    display:flex;
-    align-items:center;
-    gap:13px;
-    margin-bottom:25px;
-}
-.bimarstop-auth-logo{
-    width:48px;height:48px;flex:0 0 48px;
-    display:grid;place-items:center;
-    border-radius:15px;
-    background:var(--bimar-primary);
-    color:#fff;
-    font-size:24px;
-    box-shadow:0 9px 24px color-mix(in srgb,var(--bimar-primary) 30%,transparent);
-}
+/* Authentication */
+body.bimarstop-site:has(#bs-login-mobile),body.bimarstop-site:has(#bimarstop-register-mobile){min-height:100vh;background:radial-gradient(circle at 10% 0%,color-mix(in srgb,var(--bimar-primary) 13%,transparent),transparent 30%),radial-gradient(circle at 100% 100%,color-mix(in srgb,var(--bimar-primary) 9%,transparent),transparent 34%),var(--bimar-bg)}
+.bimarstop-auth-card{position:relative;width:min(440px,calc(100vw - 32px));margin:7vh auto 40px;padding:38px 34px 30px;background:color-mix(in srgb,var(--bimar-surface) 95%,transparent);border:1px solid color-mix(in srgb,var(--bimar-border) 85%,transparent);border-radius:28px;box-shadow:0 28px 80px rgba(15,23,42,.14);backdrop-filter:blur(18px);text-align:right;overflow:hidden}
+.bimarstop-auth-card:before{content:"";position:absolute;inset:0 0 auto;height:4px;background:var(--bimar-primary)}
+.bimarstop-auth-brand{display:flex;align-items:center;gap:13px;margin-bottom:28px}
+.bimarstop-auth-logo{width:50px;height:50px;flex:0 0 50px;display:grid;place-items:center;border-radius:16px;background:var(--bimar-primary);color:#fff;font-size:24px;box-shadow:0 10px 25px color-mix(in srgb,var(--bimar-primary) 28%,transparent)}
 .bimarstop-auth-title{margin:0;font-size:24px;font-weight:800;color:var(--bimar-text);letter-spacing:-.5px}
 .bimarstop-auth-subtitle{margin:4px 0 0;color:var(--bimar-muted);font-size:13px;line-height:1.8}
-.bimarstop-auth-label{display:block;margin:0 0 8px;font-size:13px;font-weight:700;color:var(--bimar-text)}
-.bimarstop-auth-field{
-    width:100%!important;
-    min-height:54px!important;
-    padding:0 16px!important;
-    border:1px solid var(--bimar-border)!important;
-    border-radius:14px!important;
-    background:var(--bimar-surface)!important;
-    color:var(--bimar-text)!important;
-    font:inherit!important;
-    font-size:15px!important;
-    outline:none!important;
-    box-shadow:none!important;
-    transition:.2s ease!important;
-}
-.bimarstop-auth-field:focus{
-    border-color:var(--bimar-primary)!important;
-    box-shadow:0 0 0 4px color-mix(in srgb,var(--bimar-primary) 13%,transparent)!important;
-}
-.bimarstop-auth-btn{
-    width:100%!important;
-    min-height:54px!important;
-    margin-top:14px!important;
-    border:0!important;
-    border-radius:14px!important;
-    background:var(--bimar-primary)!important;
-    color:#fff!important;
-    font:inherit!important;
-    font-weight:750!important;
-    cursor:pointer!important;
-    transition:transform .15s ease,filter .15s ease,box-shadow .15s ease!important;
-    box-shadow:0 10px 24px color-mix(in srgb,var(--bimar-primary) 24%,transparent)!important;
-}
-.bimarstop-auth-btn:hover{filter:brightness(.96);transform:translateY(-1px)}
-.bimarstop-auth-btn:active{transform:translateY(0)}
-.bimarstop-auth-status{
-    min-height:22px;
-    margin-top:14px;
-    padding:0 4px;
-    color:var(--bimar-muted);
-    font-size:13px;
-    line-height:1.8;
-}
-.bimarstop-auth-otp{
-    margin-top:20px;
-    padding-top:20px;
-    border-top:1px solid var(--bimar-border);
-    animation:bimarstopAuthIn .25s ease;
-}
-.bimarstop-auth-hint{
-    margin:0 0 10px;
-    color:var(--bimar-muted);
-    font-size:12px;
-}
-.bimarstop-auth-footer{
-    margin:24px 0 0;
-    padding-top:18px;
-    border-top:1px solid var(--bimar-border);
-    color:var(--bimar-muted);
-    font-size:12px;
-    text-align:center;
-}
-.bimarstop-auth-footer a{font-weight:700;text-decoration:none}
+.bimarstop-auth-label{display:block;margin:0 0 9px;font-size:13px;font-weight:750;color:var(--bimar-text)}
+.bimarstop-auth-field{display:block!important;width:100%!important;height:58px!important;min-height:58px!important;box-sizing:border-box!important;padding:0 18px!important;border:1.5px solid var(--bimar-border)!important;border-radius:16px!important;background:color-mix(in srgb,var(--bimar-surface) 92%,var(--bimar-bg))!important;color:var(--bimar-text)!important;font-family:inherit!important;font-size:16px!important;font-weight:500!important;line-height:58px!important;outline:0!important;box-shadow:inset 0 1px 2px rgba(15,23,42,.035)!important;transition:border-color .18s ease,box-shadow .18s ease,background .18s ease,transform .18s ease!important}
+.bimarstop-auth-field::placeholder{color:var(--bimar-muted)!important;opacity:.72!important}
+.bimarstop-auth-field:hover{border-color:color-mix(in srgb,var(--bimar-primary) 45%,var(--bimar-border))!important}
+.bimarstop-auth-field:focus{border-color:var(--bimar-primary)!important;background:var(--bimar-surface)!important;box-shadow:0 0 0 4px color-mix(in srgb,var(--bimar-primary) 12%,transparent),0 5px 16px rgba(15,23,42,.06)!important;transform:translateY(-1px)}
+#bs-login-mobile,#bimarstop-register-mobile{text-align:right;direction:ltr;letter-spacing:.6px}
+#bs-login-code,#bimarstop-register-otp{text-align:center;direction:ltr;letter-spacing:9px;font-size:20px!important;font-weight:750!important;padding-left:22px!important}
+.bimarstop-auth-btn{position:relative;display:flex!important;align-items:center!important;justify-content:center!important;width:100%!important;height:58px!important;min-height:58px!important;margin-top:14px!important;padding:0 20px!important;box-sizing:border-box!important;border:0!important;border-radius:16px!important;background:var(--bimar-primary)!important;color:#fff!important;font-family:inherit!important;font-size:15px!important;font-weight:800!important;letter-spacing:-.1px!important;cursor:pointer!important;box-shadow:0 9px 22px color-mix(in srgb,var(--bimar-primary) 25%,transparent),inset 0 1px 0 rgba(255,255,255,.16)!important;transition:transform .16s ease,filter .16s ease,box-shadow .16s ease!important}
+.bimarstop-auth-btn:after{content:"←";position:absolute;left:18px;font-size:18px;opacity:.8;transition:transform .16s ease}
+.bimarstop-auth-btn:hover{filter:brightness(.97);transform:translateY(-2px);box-shadow:0 13px 28px color-mix(in srgb,var(--bimar-primary) 30%,transparent),inset 0 1px 0 rgba(255,255,255,.18)!important}
+.bimarstop-auth-btn:hover:after{transform:translateX(-3px)}
+.bimarstop-auth-btn:active{transform:translateY(0);box-shadow:0 6px 14px color-mix(in srgb,var(--bimar-primary) 22%,transparent)!important}
+.bimarstop-auth-btn:focus-visible{outline:3px solid color-mix(in srgb,var(--bimar-primary) 25%,transparent)!important;outline-offset:3px}
+.bimarstop-auth-status{min-height:22px;margin-top:14px;padding:0 4px;color:var(--bimar-muted);font-size:13px;line-height:1.8}
+.bimarstop-auth-otp{margin-top:21px;padding-top:21px;border-top:1px solid var(--bimar-border);animation:bimarstopAuthIn .25s ease}
+.bimarstop-auth-hint{margin:0 0 10px;color:var(--bimar-muted);font-size:12px}
+.bimarstop-auth-footer{margin:25px 0 0;padding-top:18px;border-top:1px solid var(--bimar-border);color:var(--bimar-muted);font-size:12px;text-align:center}
+.bimarstop-auth-footer a{font-weight:750;text-decoration:none}
 @keyframes bimarstopAuthIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-@media(max-width:520px){
-    .bimarstop-auth-card{margin:18px auto 25px;padding:30px 22px 24px;border-radius:23px}
-    .bimarstop-auth-title{font-size:21px}
-}
+@media(max-width:520px){.bimarstop-auth-card{margin:18px auto 25px;padding:30px 22px 24px;border-radius:23px}.bimarstop-auth-title{font-size:21px}.bimarstop-auth-field,.bimarstop-auth-btn{height:56px!important;min-height:56px!important}}
