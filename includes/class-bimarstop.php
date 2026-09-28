@@ -1211,7 +1211,7 @@ final class Plugin {
 
             $stage = 'بررسی کد ذخیره‌شده';
             $stored=get_transient('bimarstop_otp_'.md5($mobile));
-            if(!$stored||!wp_hash_equals($stored,wp_hash($code.'|'.$mobile))) {
+            if(!is_string($stored)||!hash_equals($stored,(string)wp_hash($code.'|'.$mobile))) {
                 wp_send_json_error(['message'=>'کد تأیید نادرست یا منقضی شده است.']);
             }
 
