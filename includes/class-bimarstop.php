@@ -51,6 +51,7 @@ final class Plugin {
         add_action('wp_ajax_bimarstop_toggle_document_hidden', [$this, 'ajax_toggle_document_hidden']);
         add_action('wp_ajax_bimarstop_add_document_folder', [$this, 'ajax_add_document_folder']);
         add_action('wp_ajax_bimarstop_move_document_folder', [$this, 'ajax_move_document_folder']);
+        add_action('wp_ajax_bimarstop_delete_document_folder', [$this, 'ajax_delete_document_folder']);
         add_action('wp_ajax_bimarstop_share_document', [$this, 'ajax_share_document']);
         add_action('template_redirect', [$this, 'require_login']);
         add_filter('show_admin_bar', [$this, 'show_admin_bar']);
@@ -692,7 +693,7 @@ final class Plugin {
                 send=document.getElementById("bimarstop-send"), file=document.getElementById("bimarstop-chat-file"),
                 attachment=document.getElementById("bimar-chat-attachment"), fileName=document.getElementById("bimar-file-name"),
                 docSelect=document.getElementById("bimarstop-chat-document"),
-                remove=document.getElementById("bimar-file-remove"), last=0, loading=false, seen={};
+                remove=document.getElementById("bimar-file-remove"), last=0, loading=false, seen={}, sent={};
             if(!box||!input||!send)return;
             function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML;}
             function render(m){
@@ -729,7 +730,7 @@ final class Plugin {
                 send.disabled=true;send.classList.add("loading");
                 fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(function(x){
                     send.disabled=false;send.classList.remove("loading");
-                    if(x.success){input.value="";clearFile();load();}else{alert((x.data&&x.data.message)?x.data.message:"ارسال پیام ناموفق بود.");}
+                    if(x.success){input.value="";clearFile();if(x.data&&x.data.message_id){last=Math.max(last,parseInt(x.data.message_id)||0);sent[String(x.data.message_id)]=true;}load();}else{alert((x.data&&x.data.message)?x.data.message:"ارسال پیام ناموفق بود.");}
                 }).catch(function(){send.disabled=false;send.classList.remove("loading");alert("خطا در ارتباط با سرور.");});
             }
             send.onclick=sendMessage;
@@ -790,9 +791,12 @@ final class Plugin {
             $path=$upload['file'];$name=sanitize_file_name($_FILES['chat_file']['name']);$size=(int)$_FILES['chat_file']['size'];$type=$upload['type'];
         }
         if($msg==='' && !$path) wp_send_json_error(['message'=>'پیام یا فایل وارد کنید.']);
+        if($wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}bimarstop_chat_messages WHERE thread_id=%d AND sender_id=%d AND message=%s AND attachment_path=%s AND created_at >= %s LIMIT 1",$thread->id,$uid,$msg,$path,current_time('mysql',time()-8)))) {
+            wp_send_json_error(['message'=>'پیام تکراری است.']);
+        }
         $wpdb->insert($wpdb->prefix.'bimarstop_chat_messages',['thread_id'=>$thread->id,'sender_id'=>$uid,'message'=>$msg,'attachment_path'=>$path,'attachment_name'=>$name,'attachment_size'=>$size,'attachment_type'=>$type,'created_at'=>current_time('mysql')],['%d','%d','%s','%s','%s','%d','%s','%s']);
         $wpdb->update($tname,['updated_at'=>current_time('mysql')],['id'=>$thread->id],['%s'],['%d']);
-        wp_send_json_success();
+        wp_send_json_success(['message_id'=>(int)$wpdb->insert_id]);
     }
 
     public function ajax_get_messages(): void {
@@ -1058,7 +1062,7 @@ final class Plugin {
                 foreach(($children[(int)$parent]??[]) as $cat){
                     $cid=(int)$cat->id;
                     echo '<section class="bimar-doc-col bimar-folder" draggable="true" data-category="'.$cid.'">';
-                    echo '<div class="bimar-folder-head"><h3>📁 <span class="bimar-folder-title">'.esc_html($cat->name).'</span></h3></div>';
+                    echo '<div class="bimar-folder-head"><h3>📁 <span class="bimar-folder-title">'.esc_html($cat->name).'</span></h3><button type="button" class="button bimar-folder-delete" data-folder="'.$cid.'">🗑️ حذف</button></div>';
                     echo '<div class="bimar-folder-sub">این پوشه می‌تواند زیرپوشه و فایل داشته باشد.</div>';
                     echo '<div class="bimar-doc-list">';
                     $has=false;
@@ -1110,6 +1114,7 @@ final class Plugin {
                         dragged=null;
                     });
                 });
+                board.querySelectorAll(".bimar-folder-delete").forEach(function(btn){btn.addEventListener("click",function(e){e.stopPropagation();if(!confirm("این پوشه حذف شود؟ فقط پوشه خالی قابل حذف است."))return;var f=new FormData();f.append("action","bimarstop_delete_document_folder");f.append("nonce",nonce);f.append("folder_id",btn.dataset.folder);fetch(ajax,{method:"POST",body:f}).then(function(r){return r.json();}).then(function(x){if(x.success)location.reload();else alert((x.data&&x.data.message)||"حذف پوشه ناموفق بود.");});});});
                 board.querySelectorAll(".bimar-doc-rename").forEach(function(btn){btn.addEventListener("click",function(){
                     var name=prompt("نام جدید فایل را وارد کنید:",btn.dataset.name);if(name===null)return;name=name.trim();if(!name)return;
                     var f=new FormData();f.append("action","bimarstop_rename_document");f.append("nonce",nonce);f.append("document_id",btn.dataset.doc);f.append("name",name);
@@ -1200,6 +1205,18 @@ final class Plugin {
         $ok=$wpdb->insert($table,['name'=>$name,'parent_id'=>$parent,'created_at'=>current_time('mysql')],['%s','%d','%s']);
         if(!$ok) wp_send_json_error(['message'=>'ساخت پوشه ناموفق بود.']);
         wp_send_json_success(['id'=>(int)$wpdb->insert_id]);
+    }
+
+    public function ajax_delete_document_folder(): void {
+        if($this->current_role()!=='bimarstop_operator' && !current_user_can('manage_options')) wp_send_json_error(['message'=>'دسترسی ندارید.'],403);
+        check_ajax_referer('bimarstop_chat','nonce');
+        global $wpdb; $id=absint($_POST['folder_id']??0); $table=$wpdb->prefix.'bimarstop_document_categories';
+        if(!$id) wp_send_json_error(['message'=>'پوشه نامعتبر است.']);
+        $children=(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table WHERE parent_id=%d",$id));
+        $docs=(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}bimarstop_documents WHERE category_id=%d",$id));
+        if($children||$docs) wp_send_json_error(['message'=>'پوشه خالی نیست. ابتدا فایل‌ها و زیرپوشه‌ها را جابه‌جا یا حذف کنید.']);
+        if(!$wpdb->delete($table,['id'=>$id],['%d'])) wp_send_json_error(['message'=>'حذف پوشه ناموفق بود.']);
+        wp_send_json_success();
     }
 
     public function ajax_move_document_folder(): void {
