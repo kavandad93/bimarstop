@@ -1194,56 +1194,65 @@ final class Plugin {
     }
 
     public function ajax_verify_auth_otp(): void {
-        check_ajax_referer('bimarstop_auth','nonce');
-
-        $mobile=$this->normalize_mobile(sanitize_text_field(wp_unslash($_POST['mobile']??'')));
-        $code=preg_replace('/\\D+/','',(string)wp_unslash($_POST['code']??''));
-
-        if(!$this->valid_mobile($mobile)||strlen($code)!==6) {
-            wp_send_json_error(['message'=>'شماره موبایل یا کد تأیید معتبر نیست.']);
+        try {
+            
+                    check_ajax_referer('bimarstop_auth','nonce');
+            
+                    $mobile=$this->normalize_mobile(sanitize_text_field(wp_unslash($_POST['mobile']??'')));
+                    $code=preg_replace('/\\D+/','',(string)wp_unslash($_POST['code']??''));
+            
+                    if(!$this->valid_mobile($mobile)||strlen($code)!==6) {
+                        wp_send_json_error(['message'=>'شماره موبایل یا کد تأیید معتبر نیست.']);
+                    }
+            
+                    $stored=get_transient('bimarstop_otp_'.md5($mobile));
+                    if(!$stored||!wp_hash_equals($stored,wp_hash($code.'|'.$mobile))) {
+                        wp_send_json_error(['message'=>'کد تأیید نادرست یا منقضی شده است.']);
+                    }
+            
+                    $users=get_users([
+                        'meta_key'=>'bimarstop_mobile',
+                        'meta_value'=>$mobile,
+                        'number'=>1,
+                        'fields'=>'ID'
+                    ]);
+            
+                    if($users) {
+                        $user_id=(int)$users[0];
+                    } else {
+                        $login='mobile_'.substr($mobile,1);
+                        $base_login=$login;
+                        $i=1;
+                        while(username_exists($login)) $login=$base_login.'_'.$i++;
+            
+                        $user_id=wp_create_user($login,wp_generate_password(32,true,true));
+                        if(is_wp_error($user_id)) {
+                            wp_send_json_error(['message'=>'ایجاد حساب کاربری ناموفق بود.']);
+                        }
+            
+                        wp_update_user([
+                            'ID'=>$user_id,
+                            'role'=>'bimarstop_patient',
+                            'display_name'=>$mobile,
+                            'user_email'=>$mobile.'@bimarstop.local'
+                        ]);
+                        update_user_meta($user_id,'bimarstop_mobile',$mobile);
+                    }
+            
+                    delete_transient('bimarstop_otp_'.md5($mobile));
+                    delete_transient('bimarstop_otp_rate_'.md5($mobile));
+            
+                    wp_set_auth_cookie($user_id,true,is_ssl());
+                    wp_set_current_user($user_id);
+            
+                    wp_send_json_success(['redirect'=>admin_url()]);
+                }
+            
+            
+        } catch (\Throwable $e) {
+            error_log('[BimarStop OTP] ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+            wp_send_json_error(['message'=>'خطای داخلی هنگام ورود رخ داد. لطفاً دوباره تلاش کنید.']);
         }
-
-        $stored=get_transient('bimarstop_otp_'.md5($mobile));
-        if(!$stored||!wp_hash_equals($stored,wp_hash($code.'|'.$mobile))) {
-            wp_send_json_error(['message'=>'کد تأیید نادرست یا منقضی شده است.']);
-        }
-
-        $users=get_users([
-            'meta_key'=>'bimarstop_mobile',
-            'meta_value'=>$mobile,
-            'number'=>1,
-            'fields'=>'ID'
-        ]);
-
-        if($users) {
-            $user_id=(int)$users[0];
-        } else {
-            $login='mobile_'.substr($mobile,1);
-            $base_login=$login;
-            $i=1;
-            while(username_exists($login)) $login=$base_login.'_'.$i++;
-
-            $user_id=wp_create_user($login,wp_generate_password(32,true,true));
-            if(is_wp_error($user_id)) {
-                wp_send_json_error(['message'=>'ایجاد حساب کاربری ناموفق بود.']);
-            }
-
-            wp_update_user([
-                'ID'=>$user_id,
-                'role'=>'bimarstop_patient',
-                'display_name'=>$mobile,
-                'user_email'=>$mobile.'@bimarstop.local'
-            ]);
-            update_user_meta($user_id,'bimarstop_mobile',$mobile);
-        }
-
-        delete_transient('bimarstop_otp_'.md5($mobile));
-        delete_transient('bimarstop_otp_rate_'.md5($mobile));
-
-        wp_set_auth_cookie($user_id,true,is_ssl());
-        wp_set_current_user($user_id);
-
-        wp_send_json_success(['redirect'=>admin_url()]);
     }
 
     private function send_plain_otp(string $mobile): bool {
