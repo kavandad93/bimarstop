@@ -793,8 +793,15 @@ final class Plugin {
             $path=$upload['file'];$name=sanitize_file_name($_FILES['chat_file']['name']);$size=(int)$_FILES['chat_file']['size'];$type=$upload['type'];
         }
         if($msg==='' && !$path) wp_send_json_error(['message'=>'پیام یا فایل وارد کنید.']);
-        if($wpdb->get_var($wpdb->prepare("SELECT id FROM {$wpdb->prefix}bimarstop_chat_messages WHERE thread_id=%d AND sender_id=%d AND message=%s AND attachment_path=%s AND created_at >= %s LIMIT 1",$thread->id,$uid,$msg,$path,wp_date('Y-m-d H:i:s', current_time('timestamp')-8)))) {
-            wp_send_json_error(['message'=>'پیام تکراری است.']);
+        // فقط ارسال دوباره دقیقاً همان پیامِ قبلی ممنوع است.
+        // تکرار پیام بعد از یک پیام متفاوت کاملاً مجاز است:
+        // سلام → خوبی → سلام → خوبی
+        $previous=$wpdb->get_row($wpdb->prepare(
+            "SELECT message,attachment_path FROM {$wpdb->prefix}bimarstop_chat_messages WHERE thread_id=%d AND sender_id=%d ORDER BY id DESC LIMIT 1",
+            $thread->id,$uid
+        ));
+        if($previous && (string)$previous->message===$msg && (string)$previous->attachment_path===$path){
+            wp_send_json_error(['message'=>'پیام تکراری پشت‌سرهم مجاز نیست.']);
         }
         $wpdb->insert($wpdb->prefix.'bimarstop_chat_messages',['thread_id'=>$thread->id,'sender_id'=>$uid,'message'=>$msg,'attachment_path'=>$path,'attachment_name'=>$name,'attachment_size'=>$size,'attachment_type'=>$type,'created_at'=>current_time('mysql')],['%d','%d','%s','%s','%s','%d','%s','%s']);
         $wpdb->update($tname,['updated_at'=>current_time('mysql')],['id'=>$thread->id],['%s'],['%d']);
