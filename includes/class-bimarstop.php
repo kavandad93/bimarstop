@@ -321,18 +321,18 @@ final class Plugin {
             'sanitize_callback' => function ($input) {
                 $theme = sanitize_key($input['theme'] ?? 'light-1');
                 $api_key = sanitize_text_field($input['sms_api_key'] ?? '');
-                $template_id = absint($input['sms_template_id'] ?? 0);
+                $line_number = sanitize_text_field($input['sms_line_number'] ?? '');
                 return [
                     'theme' => array_key_exists($theme, $this->themes()) ? $theme : 'light-1',
                     'sms_api_key' => $api_key,
-                    'sms_template_id' => $template_id,
+                    'sms_line_number' => $line_number,
                 ];
             },
         ]);
     }
 
     public function enqueue_assets(): void {
-        $settings = wp_parse_args(get_option('bimarstop_settings', []), ['theme' => 'light-1', 'sms_api_key' => '', 'sms_template_id' => 0]);
+        $settings = wp_parse_args(get_option('bimarstop_settings', []), ['theme' => 'light-1', 'sms_api_key' => '', 'sms_line_number' => '']);
         $theme = array_key_exists($settings['theme'], $this->themes()) ? $settings['theme'] : 'light-1';
 
         wp_enqueue_style('bimarstop-style', BIMARSTOP_URL . 'assets/bimarstop.css', [], BIMARSTOP_VERSION);
@@ -1085,8 +1085,8 @@ final class Plugin {
         $mobile = $this->normalize_mobile(sanitize_text_field(wp_unslash($_POST['mobile'] ?? '')));
         if (!$this->valid_mobile($mobile)) wp_send_json_error(['message'=>'شماره موبایل معتبر نیست.']);
 
-        $settings = wp_parse_args(get_option('bimarstop_settings', []), ['sms_api_key'=>'', 'sms_template_id'=>0]);
-        if (empty($settings['sms_api_key']) || empty($settings['sms_template_id'])) {
+        $settings = wp_parse_args(get_option('bimarstop_settings', []), ['sms_api_key'=>'', 'sms_line_number'=>'']);
+        if (empty($settings['sms_api_key']) || empty($settings['sms_line_number'])) {
             wp_send_json_error(['message'=>'تنظیمات SMS.ir هنوز توسط مدیر تکمیل نشده است.']);
         }
 
@@ -1106,7 +1106,8 @@ final class Plugin {
         set_transient('bimarstop_otp_' . md5($mobile), wp_hash($code . '|' . $mobile), 5 * MINUTE_IN_SECONDS);
         set_transient('bimarstop_otp_rate_' . md5($mobile), 1, MINUTE_IN_SECONDS);
 
-        $response = wp_remote_post('https://api.sms.ir/v1/send/verify', [
+        $message_text = "سلام، به بیماراستاپ خوش آمدید\nرمز شما: {$code} میباشد.\n#{$code}";
+        $response = wp_remote_post('https://api.sms.ir/v1/send/bulk', [
             'timeout' => 15,
             'headers' => [
                 'Content-Type' => 'application/json',
@@ -1114,11 +1115,9 @@ final class Plugin {
                 'X-API-KEY' => $settings['sms_api_key'],
             ],
             'body' => wp_json_encode([
-                'Mobile' => $mobile,
-                'TemplateId' => (int) $settings['sms_template_id'],
-                'Parameters' => [
-                    ['Name' => 'Code', 'Value' => $code],
-                ],
+                'LineNumber' => $settings['sms_line_number'],
+                'MessageText' => $message_text,
+                'Mobiles' => [$mobile],
             ]),
         ]);
 
@@ -1254,7 +1253,7 @@ final class Plugin {
     public function settings_page(): void {
         if (!current_user_can('manage_options')) return;
 
-        $settings = wp_parse_args(get_option('bimarstop_settings', []), ['theme' => 'light-1', 'sms_api_key' => '', 'sms_template_id' => 0]);
+        $settings = wp_parse_args(get_option('bimarstop_settings', []), ['theme' => 'light-1', 'sms_api_key' => '', 'sms_line_number' => '']);
         $themes = $this->themes();
         ?>
         <div class="wrap" dir="rtl">
@@ -1289,11 +1288,11 @@ final class Plugin {
                             <td><input type="password" id="bimarstop_sms_api_key" name="bimarstop_settings[sms_api_key]" value="<?php echo esc_attr($settings['sms_api_key']); ?>" class="regular-text" autocomplete="new-password"></td>
                         </tr>
                         <tr>
-                            <th><label for="bimarstop_sms_template_id">Template ID</label></th>
-                            <td><input type="number" min="1" id="bimarstop_sms_template_id" name="bimarstop_settings[sms_template_id]" value="<?php echo esc_attr((int)$settings['sms_template_id']); ?>" class="small-text"></td>
+                            <th><label for="bimarstop_sms_line_number">شماره خط ارسال</label></th>
+                            <td><input type="text" id="bimarstop_sms_line_number" name="bimarstop_settings[sms_line_number]" value="<?php echo esc_attr($settings['sms_line_number']); ?>" class="regular-text" placeholder="مثلاً 3000xxxx"></td>
                         </tr>
                     </table>
-                    <p class="description">در قالب SMS.ir باید پارامتر کد تأیید با نام <code>Code</code> تعریف شده باشد.</p>
+                    <p class="description">پیامک بدون قالب ارسال می‌شود و متن آن ثابت است: «سلام، به بیماراستاپ خوش آمدید / رمز شما: {code} میباشد. / #{code}»</p>
                 </div>
 
                 <?php submit_button('ذخیره تنظیمات'); ?>
