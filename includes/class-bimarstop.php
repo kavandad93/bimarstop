@@ -242,7 +242,10 @@ final class Plugin {
     public function redirect_wp_login(): void {
         if(isset($_GET['action']) && $_GET['action']==='logout') return;
         if(is_user_logged_in()){ wp_safe_redirect(admin_url()); exit; }
-        wp_safe_redirect(home_url('/bimarstop-login/')); exit;
+
+        // wp-login.php remains available for administrators and other staff.
+        // The BimarStop OTP page is still the primary login flow for patients.
+        return;
     }
 
     public function bimarstop_login_url($login_url,$redirect='',$force_reauth=false): string { return home_url('/bimarstop-login/'); }
