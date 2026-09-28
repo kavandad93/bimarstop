@@ -29,6 +29,8 @@ final class Plugin {
         add_action('wp_ajax_nopriv_bimarstop_verify_auth_otp', [$this, 'ajax_verify_auth_otp']);
         add_action('login_init', [$this, 'redirect_wp_login']);
         add_filter('login_url', [$this, 'bimarstop_login_url'], 10, 3);
+        add_shortcode('bimarstop_complete_profile', [$this, 'complete_profile_shortcode']);
+        add_action('admin_init', [$this, 'enforce_profile_completion']);
         add_action('user_new_form', [$this, 'admin_new_user_mobile_field']);
         add_action('user_profile_update_errors', [$this, 'validate_admin_mobile_field'], 10, 3);
         add_action('personal_options_update', [$this, 'save_admin_mobile_field']);
@@ -70,6 +72,7 @@ final class Plugin {
         self::create_report_and_document_tables();
         $this->ensure_registration_page();
         $this->ensure_login_page();
+        $this->ensure_profile_page();
     }
 
     private function ensure_registration_page(): void {
@@ -89,6 +92,20 @@ final class Plugin {
         if(!$page){ wp_insert_post(['post_title'=>'ورود به BimarStop','post_name'=>'bimarstop-login','post_content'=>'[bimarstop_login]','post_status'=>'publish','post_type'=>'page']); flush_rewrite_rules(false); }
     }
 
+    private function ensure_profile_page(): void {
+        $page=get_page_by_path('bimarstop-complete-profile',OBJECT,'page');
+        if(!$page){
+            wp_insert_post([
+                'post_title'=>'تکمیل اطلاعات BimarStop',
+                'post_name'=>'bimarstop-complete-profile',
+                'post_content'=>'[bimarstop_complete_profile]',
+                'post_status'=>'publish',
+                'post_type'=>'page'
+            ]);
+            flush_rewrite_rules(false);
+        }
+    }
+
     private static function register_bimarstop_roles(): void {
         $patient = get_role('bimarstop_patient');
         if (!$patient) add_role('bimarstop_patient', 'مریض', ['read' => true]);
@@ -102,9 +119,122 @@ final class Plugin {
         }
     }
 
+    private function profile_is_complete(int $user_id): bool {
+        $national_code=(string)get_user_meta($user_id,'bimarstop_national_code',true);
+        $first_name=(string)get_user_meta($user_id,'bimarstop_first_name',true);
+        $last_name=(string)get_user_meta($user_id,'bimarstop_last_name',true);
+        $birth_date=(string)get_user_meta($user_id,'bimarstop_birth_date_shamsi',true);
+        return preg_match('/^\\d{10}$/',$national_code) && $first_name!=='' && $last_name!=='' && preg_match('/^\\d{4}\\/\\d{2}\\/\\d{2}$/',$birth_date);
+    }
+
+    private function normalize_profile_digits(string $value): string {
+        return strtr($value,[
+            '۰'=>'0','۱'=>'1','۲'=>'2','۳'=>'3','۴'=>'4','۵'=>'5','۶'=>'6','۷'=>'7','۸'=>'8','۹'=>'9',
+            '٠'=>'0','١'=>'1','٢'=>'2','٣'=>'3','٤'=>'4','٥'=>'5','٦'=>'6','٧'=>'7','٨'=>'8','٩'=>'9'
+        ]);
+    }
+
+    private function valid_national_code(string $code): bool {
+        $code=$this->normalize_profile_digits($code);
+        if(!preg_match('/^\\d{10}$/',$code)) return false;
+        if(preg_match('/^(\\d)\\1{9}$/',$code)) return false;
+        $sum=0;
+        for($i=0;$i<9;$i++) $sum+=(int)$code[$i]*(10-$i);
+        $remainder=$sum%11;
+        $check=(int)$code[9];
+        return $remainder<2 ? $check===$remainder : $check===(11-$remainder);
+    }
+
+    public function enforce_profile_completion(): void {
+        if(!is_user_logged_in()) return;
+        if(wp_doing_ajax()) return;
+        if(isset($_GET['action']) && $_GET['action']==='logout') return;
+        if($this->profile_is_complete(get_current_user_id())) return;
+        if(!empty($GLOBALS['pagenow']) && $GLOBALS['pagenow']==='profile.php') return;
+        wp_safe_redirect(home_url('/bimarstop-complete-profile/'));
+        exit;
+    }
+
+    public function complete_profile_shortcode(): string {
+        if(!is_user_logged_in()){
+            wp_safe_redirect(home_url('/bimarstop-login/'));
+            exit;
+        }
+
+        $user_id=get_current_user_id();
+        if($this->profile_is_complete($user_id)){
+            wp_safe_redirect(admin_url());
+            exit;
+        }
+
+        $message='';
+        $error='';
+        if($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['bimarstop_profile_submit'])){
+            if(!isset($_POST['bimarstop_profile_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['bimarstop_profile_nonce'])),'bimarstop_complete_profile')){
+                $error='درخواست نامعتبر است. لطفاً دوباره تلاش کنید.';
+            } else {
+                $national_code=$this->normalize_profile_digits(preg_replace('/\\D+/','',(string)wp_unslash($_POST['national_code']??'')));
+                $first_name=sanitize_text_field(wp_unslash($_POST['first_name']??''));
+                $last_name=sanitize_text_field(wp_unslash($_POST['last_name']??''));
+                $birth_date=$this->normalize_profile_digits(sanitize_text_field(wp_unslash($_POST['birth_date']??'')));
+                $birth_date=preg_replace('/[-.]/','/',$birth_date);
+
+                if(!$this->valid_national_code($national_code)) $error='کد ملی معتبر نیست.';
+                elseif($first_name==='' || $last_name==='') $error='نام و نام خانوادگی را کامل وارد کنید.';
+                elseif(!preg_match('/^\\d{4}\\/\\d{2}\\/\\d{2}$/',$birth_date)) $error='تاریخ تولد را به صورت ۱۴۰۰/۰۱/۰۱ وارد کنید.';
+                else {
+                    $parts=explode('/',$birth_date);
+                    $y=(int)$parts[0]; $m=(int)$parts[1]; $d=(int)$parts[2];
+                    if($y<1300 || $y>1500 || $m<1 || $m>12 || $d<1 || $d>31) $error='تاریخ تولد شمسی معتبر نیست.';
+                    else {
+                        update_user_meta($user_id,'bimarstop_national_code',$national_code);
+                        update_user_meta($user_id,'bimarstop_first_name',$first_name);
+                        update_user_meta($user_id,'bimarstop_last_name',$last_name);
+                        update_user_meta($user_id,'bimarstop_birth_date_shamsi',$birth_date);
+                        wp_update_user(['ID'=>$user_id,'first_name'=>$first_name,'last_name'=>$last_name,'display_name'=>trim($first_name.' '.$last_name)]);
+                        wp_safe_redirect(admin_url());
+                        exit;
+                    }
+                }
+            }
+        }
+
+        ob_start(); ?>
+        <div class="bimarstop-auth-card" dir="rtl">
+            <div class="bimarstop-auth-brand">
+                <div class="bimarstop-auth-logo">🏥</div>
+                <div>
+                    <h1 class="bimarstop-auth-title">تکمیل اطلاعات</h1>
+                    <p class="bimarstop-auth-subtitle">برای ادامه ورود به BimarStop، اطلاعات زیر را کامل کنید.</p>
+                </div>
+            </div>
+            <?php if($error): ?><div class="bimarstop-auth-status" style="display:block"><?php echo esc_html($error); ?></div><?php endif; ?>
+            <form method="post">
+                <?php wp_nonce_field('bimarstop_complete_profile','bimarstop_profile_nonce'); ?>
+                <label class="bimarstop-auth-label">کد ملی</label>
+                <input class="bimarstop-auth-field" name="national_code" type="tel" inputmode="numeric" maxlength="10" required value="<?php echo esc_attr($_POST['national_code']??''); ?>" placeholder="0012345678">
+                <label class="bimarstop-auth-label">نام</label>
+                <input class="bimarstop-auth-field" name="first_name" type="text" required value="<?php echo esc_attr($_POST['first_name']??''); ?>" placeholder="نام">
+                <label class="bimarstop-auth-label">نام خانوادگی</label>
+                <input class="bimarstop-auth-field" name="last_name" type="text" required value="<?php echo esc_attr($_POST['last_name']??''); ?>" placeholder="نام خانوادگی">
+                <label class="bimarstop-auth-label">تاریخ تولد (شمسی)</label>
+                <input class="bimarstop-auth-field" name="birth_date" type="text" inputmode="numeric" maxlength="10" required value="<?php echo esc_attr($_POST['birth_date']??''); ?>" placeholder="۱۴۰۰/۰۱/۰۱">
+                <button class="bimarstop-auth-btn" type="submit" name="bimarstop_profile_submit">ذخیره و ورود به پنل</button>
+            </form>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
     public function require_login(): void {
         if ((is_front_page() || is_home()) && !is_admin()) { wp_redirect(admin_url(), 301); exit; }
-        if (is_user_logged_in() || is_admin() || wp_doing_ajax() || (defined('REST_REQUEST') && REST_REQUEST)) return;
+        if (is_user_logged_in()) {
+            if(!$this->profile_is_complete(get_current_user_id()) && !is_page('bimarstop-complete-profile')){
+                wp_safe_redirect(home_url('/bimarstop-complete-profile/')); exit;
+            }
+            return;
+        }
+        if (is_admin() || wp_doing_ajax() || (defined('REST_REQUEST') && REST_REQUEST)) return;
         if (is_page('bimarstop-register') || is_page('bimarstop-login')) return;
         wp_safe_redirect(home_url('/bimarstop-login/')); exit;
     }
