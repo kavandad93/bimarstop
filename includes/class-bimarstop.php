@@ -1055,20 +1055,18 @@ final class Plugin {
         $nonce = wp_create_nonce('bimarstop_register');
         ob_start();
         ?>
-        <div class="bimarstop-register-box" dir="rtl" style="max-width:480px;margin:30px auto;padding:24px;border:1px solid #ddd;border-radius:16px">
-            <h2>ثبت‌نام در BimarStop</h2>
-            <p>ثبت‌نام فقط با شماره موبایل و کد تأیید پیامکی انجام می‌شود.</p>
-            <label>شماره موبایل<br>
-                <input id="bimarstop-register-mobile" type="tel" inputmode="numeric" autocomplete="tel" placeholder="09123456789" style="width:100%;margin-top:6px">
-            </label>
-            <button type="button" id="bimarstop-register-send" style="margin-top:12px">دریافت کد تأیید</button>
-            <div id="bimarstop-register-otp-wrap" style="display:none;margin-top:16px">
-                <label>کد تأیید<br>
-                    <input id="bimarstop-register-otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="کد ۶ رقمی" style="width:100%;margin-top:6px">
-                </label>
-                <button type="button" id="bimarstop-register-verify" style="margin-top:12px">تأیید و ایجاد حساب</button>
+        <div class="bimarstop-auth-card bimarstop-register-box" dir="rtl">
+            <div class="bimarstop-auth-brand"><div class="bimarstop-auth-logo">🏥</div><div><h1 class="bimarstop-auth-title">ثبت‌نام در BimarStop</h1><p class="bimarstop-auth-subtitle">ساخت حساب بیمار با شماره موبایل</p></div></div>
+            <label class="bimarstop-auth-label" for="bimarstop-register-mobile">شماره موبایل</label>
+            <input class="bimarstop-auth-field" id="bimarstop-register-mobile" type="tel" inputmode="numeric" autocomplete="tel" placeholder="0912 345 6789">
+            <button class="bimarstop-auth-btn" type="button" id="bimarstop-register-send">ارسال کد تأیید</button>
+            <div class="bimarstop-auth-otp" id="bimarstop-register-otp-wrap" style="display:none">
+                <p class="bimarstop-auth-hint">کد ۶ رقمی ارسال‌شده را وارد کنید.</p>
+                <input class="bimarstop-auth-field" id="bimarstop-register-otp" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••">
+                <button class="bimarstop-auth-btn" type="button" id="bimarstop-register-verify">تأیید و ایجاد حساب</button>
             </div>
-            <div id="bimarstop-register-status" style="margin-top:14px"></div>
+            <div class="bimarstop-auth-status" id="bimarstop-register-status"></div>
+            <div class="bimarstop-auth-footer">قبلاً حساب دارید؟ <a href="<?php echo esc_url(home_url('/bimarstop-login/')); ?>">ورود با شماره موبایل</a></div>
         </div>
         <script>
         (function(){
@@ -1133,12 +1131,19 @@ final class Plugin {
         if(is_user_logged_in()){ return '<script>location.href='.wp_json_encode(admin_url()).';</script>'; }
         $ajax=admin_url('admin-ajax.php'); $nonce=wp_create_nonce('bimarstop_login');
         ob_start(); ?>
-        <div dir="rtl" style="max-width:480px;margin:30px auto;padding:24px;border:1px solid #ddd;border-radius:16px">
-        <h2>ورود به BimarStop</h2><p>ورود با شماره موبایل و کد تأیید پیامکی.</p>
-        <input id="bs-login-mobile" type="tel" inputmode="numeric" placeholder="09123456789" style="width:100%">
-        <button type="button" id="bs-login-send">دریافت کد ورود</button>
-        <div id="bs-login-otp" style="display:none"><input id="bs-login-code" maxlength="6" inputmode="numeric" placeholder="کد ۶ رقمی" style="width:100%"><button type="button" id="bs-login-verify">ورود</button></div>
-        <div id="bs-login-status"></div></div>
+        <div class="bimarstop-auth-card" dir="rtl">
+        <div class="bimarstop-auth-brand"><div class="bimarstop-auth-logo">🏥</div><div><h1 class="bimarstop-auth-title">ورود به BimarStop</h1><p class="bimarstop-auth-subtitle">ورود سریع و امن با شماره موبایل</p></div></div>
+        <label class="bimarstop-auth-label" for="bs-login-mobile">شماره موبایل</label>
+        <input class="bimarstop-auth-field" id="bs-login-mobile" type="tel" inputmode="numeric" autocomplete="tel" placeholder="0912 345 6789">
+        <button class="bimarstop-auth-btn" type="button" id="bs-login-send">ارسال کد ورود</button>
+        <div class="bimarstop-auth-otp" id="bs-login-otp" style="display:none">
+            <p class="bimarstop-auth-hint">کد ۶ رقمی پیامک‌شده را وارد کنید.</p>
+            <input class="bimarstop-auth-field" id="bs-login-code" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="••••••">
+            <button class="bimarstop-auth-btn" type="button" id="bs-login-verify">ورود به حساب</button>
+        </div>
+        <div class="bimarstop-auth-status" id="bs-login-status"></div>
+        <div class="bimarstop-auth-footer">حساب ندارید؟ <a href="<?php echo esc_url(home_url('/bimarstop-register/')); ?>">ثبت‌نام با شماره موبایل</a></div>
+        </div>
         <script>(function(){var a=<?php echo wp_json_encode($ajax); ?>,n=<?php echo wp_json_encode($nonce); ?>,m=document.getElementById('bs-login-mobile'),c=document.getElementById('bs-login-code'),w=document.getElementById('bs-login-otp'),s=document.getElementById('bs-login-status');function f(x,y){var q=new FormData();q.append('action',x);q.append('nonce',n);q.append('mobile',m.value);if(y)q.append('code',c.value);fetch(a,{method:'POST',body:q}).then(r=>r.json()).then(function(z){if(z.success){if(y)location.href=z.data.redirect;else{w.style.display='block';s.textContent='کد ورود ارسال شد.';c.focus();}}else s.textContent=z.data&&z.data.message||'خطا';});}document.getElementById('bs-login-send').onclick=function(){f('bimarstop_send_login_otp',false)};document.getElementById('bs-login-verify').onclick=function(){f('bimarstop_verify_login_otp',true)};})();</script>
         <?php return ob_get_clean();
     }
