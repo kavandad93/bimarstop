@@ -808,7 +808,7 @@ final class Plugin {
             }
         }
         if(!$thread)wp_send_json_success(['messages'=>[]]);
-        $rows=$wpdb->get_results($wpdb->prepare("SELECT m.id,m.message,m.attachment_name,m.attachment_size,m.attachment_type,u.display_name,m.created_at FROM {$wpdb->prefix}bimarstop_chat_messages m JOIN {$wpdb->users} u ON u.ID=m.sender_id WHERE m.thread_id=%d AND m.id>%d ORDER BY m.id ASC",$thread->id,$last));
+        $rows=$wpdb->get_results($wpdb->prepare("SELECT m.id,m.message,m.sender_id,m.attachment_name,m.attachment_size,m.attachment_type,u.display_name,m.created_at FROM {$wpdb->prefix}bimarstop_chat_messages m JOIN {$wpdb->users} u ON u.ID=m.sender_id WHERE m.thread_id=%d AND m.id>%d ORDER BY m.id ASC",$thread->id,$last));
         $out=[];
         foreach($rows as $r){
             $att=null;
