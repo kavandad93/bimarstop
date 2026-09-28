@@ -52,7 +52,25 @@ final class Plugin {
 
     public static function deactivate(): void { flush_rewrite_rules(); }
 
-    public function register_roles(): void { self::register_bimarstop_roles(); self::create_chat_tables(); self::create_private_chat_tables(); self::create_report_and_document_tables(); }
+    public function register_roles(): void {
+        self::register_bimarstop_roles();
+        self::create_chat_tables();
+        self::create_private_chat_tables();
+        self::create_report_and_document_tables();
+        $this->ensure_registration_page();
+    }
+
+    private function ensure_registration_page(): void {
+        $page = get_page_by_path('bimarstop-register', OBJECT, 'page');
+        if ($page) return;
+        wp_insert_post([
+            'post_title' => 'ثبت‌نام BimarStop',
+            'post_name' => 'bimarstop-register',
+            'post_content' => '[bimarstop_register]',
+            'post_status' => 'publish',
+            'post_type' => 'page',
+        ]);
+    }
 
     private static function register_bimarstop_roles(): void {
         $patient = get_role('bimarstop_patient');
@@ -69,6 +87,7 @@ final class Plugin {
 
     public function require_login(): void {
         if (is_user_logged_in() || is_admin() || wp_doing_ajax() || (defined('REST_REQUEST') && REST_REQUEST)) return;
+        if (is_page('bimarstop-register')) return;
         $login_url = function_exists('wp_login_url') ? wp_login_url(home_url('/')) : wp_login_url();
         wp_safe_redirect($login_url);
         exit;
@@ -1235,7 +1254,7 @@ final class Plugin {
     public function settings_page(): void {
         if (!current_user_can('manage_options')) return;
 
-        $settings = wp_parse_args(get_option('bimarstop_settings', []), ['theme' => 'light-1']);
+        $settings = wp_parse_args(get_option('bimarstop_settings', []), ['theme' => 'light-1', 'sms_api_key' => '', 'sms_template_id' => 0]);
         $themes = $this->themes();
         ?>
         <div class="wrap" dir="rtl">
