@@ -1300,15 +1300,31 @@ final class Plugin {
 
         if(is_wp_error($response)) {
             delete_transient($otp_key);
+            error_log('[BimarStop SMS] WP error: '.$response->get_error_message());
             return false;
         }
 
         $status=wp_remote_retrieve_response_code($response);
-        $body=json_decode(wp_remote_retrieve_body($response),true);
+        $raw_body=wp_remote_retrieve_body($response);
+        $body=json_decode($raw_body,true);
 
-        if($status<200||$status>=300||(is_array($body)&&isset($body['status'])&&!$body['status'])) {
+        if($status<200||$status>=300) {
             delete_transient($otp_key);
+            error_log('[BimarStop SMS] HTTP '.$status.' response: '.$raw_body);
             return false;
+        }
+
+        if(is_array($body)) {
+            if(isset($body['status']) && !$body['status']) {
+                delete_transient($otp_key);
+                error_log('[BimarStop SMS] API error: '.$raw_body);
+                return false;
+            }
+            if(isset($body['IsSuccessful']) && !$body['IsSuccessful']) {
+                delete_transient($otp_key);
+                error_log('[BimarStop SMS] API error: '.$raw_body);
+                return false;
+            }
         }
 
         set_transient($rate_key,1,MINUTE_IN_SECONDS);
