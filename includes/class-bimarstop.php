@@ -747,8 +747,19 @@ final class Plugin {
         $msg=sanitize_textarea_field(wp_unslash($_POST['message']??''));
         $tname=$wpdb->prefix.'bimarstop_chat_threads';
         $thread=null;
-        if($this->current_role()==='bimarstop_patient') $thread=$wpdb->get_row($wpdb->prepare("SELECT * FROM $tname WHERE patient_id=%d AND status='open' ORDER BY id DESC LIMIT 1",$uid));
-        else $thread=$wpdb->get_row($wpdb->prepare("SELECT * FROM $tname WHERE operator_id=%d AND status='open' ORDER BY updated_at DESC LIMIT 1",$uid));
+        if($this->current_role()==='bimarstop_patient') {
+            $thread=$wpdb->get_row($wpdb->prepare("SELECT * FROM $tname WHERE patient_id=%d AND status='open' ORDER BY id DESC LIMIT 1",$uid));
+        } else {
+            $thread=$wpdb->get_row($wpdb->prepare("SELECT * FROM $tname WHERE operator_id=%d AND status='open' ORDER BY updated_at DESC LIMIT 1",$uid));
+            // اگر اپراتور هنوز چتی را به خودش اختصاص نداده، اولین گفت‌وگوی منتظر را بردار.
+            if(!$thread && $this->current_role()==='bimarstop_operator'){
+                $thread=$wpdb->get_row("SELECT * FROM $tname WHERE operator_id=0 AND status='open' ORDER BY updated_at ASC, id ASC LIMIT 1");
+                if($thread){
+                    $wpdb->update($tname,['operator_id'=>$uid,'updated_at'=>current_time('mysql')],['id'=>$thread->id],['%d','%s'],['%d']);
+                    $thread->operator_id=$uid;
+                }
+            }
+        }
         if(!$thread && $this->current_role()==='bimarstop_patient'){
             $now=current_time('mysql');$wpdb->insert($tname,['patient_id'=>$uid,'operator_id'=>0,'status'=>'open','created_at'=>$now,'updated_at'=>$now],['%d','%d','%s','%s','%s']);
             $thread=(object)['id'=>$wpdb->insert_id,'patient_id'=>$uid,'operator_id'=>0,'status'=>'open'];
@@ -783,8 +794,18 @@ final class Plugin {
         check_ajax_referer('bimarstop_chat','nonce');
         if (!is_user_logged_in()) wp_send_json_error();
         global $wpdb;$uid=get_current_user_id();$last=absint($_POST['last_id']??0);$tn=$wpdb->prefix.'bimarstop_chat_threads';$thread=null;
-        if($this->current_role()==='bimarstop_patient')$thread=$wpdb->get_row($wpdb->prepare("SELECT * FROM $tn WHERE patient_id=%d AND status='open' ORDER BY id DESC LIMIT 1",$uid));
-        else $thread=$wpdb->get_row($wpdb->prepare("SELECT * FROM $tn WHERE operator_id=%d AND status='open' ORDER BY updated_at DESC LIMIT 1",$uid));
+        if($this->current_role()==='bimarstop_patient'){
+            $thread=$wpdb->get_row($wpdb->prepare("SELECT * FROM $tn WHERE patient_id=%d AND status='open' ORDER BY id DESC LIMIT 1",$uid));
+        } else {
+            $thread=$wpdb->get_row($wpdb->prepare("SELECT * FROM $tn WHERE operator_id=%d AND status='open' ORDER BY updated_at DESC LIMIT 1",$uid));
+            if(!$thread && $this->current_role()==='bimarstop_operator'){
+                $thread=$wpdb->get_row("SELECT * FROM $tn WHERE operator_id=0 AND status='open' ORDER BY updated_at ASC, id ASC LIMIT 1");
+                if($thread){
+                    $wpdb->update($tn,['operator_id'=>$uid,'updated_at'=>current_time('mysql')],['id'=>$thread->id],['%d','%s'],['%d']);
+                    $thread->operator_id=$uid;
+                }
+            }
+        }
         if(!$thread)wp_send_json_success(['messages'=>[]]);
         $rows=$wpdb->get_results($wpdb->prepare("SELECT m.id,m.message,m.attachment_name,m.attachment_size,m.attachment_type,u.display_name,m.created_at FROM {$wpdb->prefix}bimarstop_chat_messages m JOIN {$wpdb->users} u ON u.ID=m.sender_id WHERE m.thread_id=%d AND m.id>%d ORDER BY m.id ASC",$thread->id,$last));
         $out=[];
