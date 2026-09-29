@@ -1057,11 +1057,15 @@ final class Plugin {
             $id=absint($_POST['issue_id']??0); $status=sanitize_key($_POST['status']??'open');
             if(in_array($status,['open','progress','closed'],true)) $wpdb->update($table,['status'=>$status,'updated_at'=>current_time('mysql')],['id'=>$id],['%s','%s'],['%d']);
         }
+        if($report_manager && isset($_POST['bimarstop_issue_delete_nonce']) && wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['bimarstop_issue_delete_nonce'])),'bimarstop_issue_delete')){
+            $id=absint($_POST['issue_id']??0);
+            if($id>0) $wpdb->delete($table,['id'=>$id],['%d']);
+        }
         echo '<div class="wrap" dir="rtl"><h1>🛠 گزارش مشکل</h1>';
         if($report_manager){
             $rows=$wpdb->get_results("SELECT r.*,u.display_name FROM $table r LEFT JOIN {$wpdb->users} u ON u.ID=r.user_id ORDER BY r.id DESC");
             echo '<table class="widefat striped"><thead><tr><th>#</th><th>کاربر</th><th>موضوع</th><th>اولویت</th><th>وضعیت</th><th>تاریخ</th><th>تغییر</th></tr></thead><tbody>';
-            foreach($rows as $r){ echo '<tr><td>'.(int)$r->id.'</td><td>'.esc_html($r->display_name).'</td><td>'.esc_html($r->subject).'<br><small>'.esc_html($r->description).'</small></td><td>'.esc_html($r->priority).'</td><td>'.esc_html($r->status).'</td><td>'.esc_html($r->created_at).'</td><td><form method="post">'.wp_nonce_field('bimarstop_issue_status','bimarstop_issue_status_nonce',true,false).'<input type="hidden" name="issue_id" value="'.(int)$r->id.'"><select name="status"><option value="open">باز</option><option value="progress">در حال بررسی</option><option value="closed">بسته</option></select> <button class="button">ذخیره</button></form></td></tr>'; }
+            foreach($rows as $r){ echo '<tr><td>'.(int)$r->id.'</td><td>'.esc_html($r->display_name).'</td><td>'.esc_html($r->subject).'<br><small>'.esc_html($r->description).'</small></td><td>'.esc_html($r->priority).'</td><td>'.esc_html($r->status).'</td><td>'.esc_html($r->created_at).'</td><td><form method="post">'.wp_nonce_field('bimarstop_issue_status','bimarstop_issue_status_nonce',true,false).'<input type="hidden" name="issue_id" value="'.(int)$r->id.'"><select name="status"><option value="open"'.($r->status==='open'?' selected':'').'>باز</option><option value="progress"'.($r->status==='progress'?' selected':'').'>در حال بررسی</option><option value="closed"'.($r->status==='closed'?' selected':'').'>بسته</option></select> <button class="button">ذخیره</button></form>'.($r->status==='closed'?'<form method="post" style="display:inline-block;margin-top:5px" onsubmit="return confirm(\'این گزارش حذف شود؟\');">'.wp_nonce_field('bimarstop_issue_delete','bimarstop_issue_delete_nonce',true,false).'<input type="hidden" name="issue_id" value="'.(int)$r->id.'"><button class="button button-link-delete">🗑 حذف گزارش</button></form>':'').'</td></tr>'; }
             if(!$rows) echo '<tr><td colspan="7">گزارشی ثبت نشده است.</td></tr>';
             echo '</tbody></table>';
         } else {
