@@ -193,8 +193,7 @@ final class Plugin {
                 elseif($first_name==='' || $last_name==='') $error='نام و نام خانوادگی را کامل وارد کنید.';
                 elseif($birth_year<1300 || $birth_year>1500 || $birth_month<1 || $birth_month>12 || $birth_day<1 || $birth_day>31) $error='تاریخ تولد شمسی معتبر نیست.';
                 else {
-                    else {
-                        update_user_meta($user_id,'bimarstop_national_code',$national_code);
+                    update_user_meta($user_id,'bimarstop_national_code',$national_code);
                         update_user_meta($user_id,'bimarstop_first_name',$first_name);
                         update_user_meta($user_id,'bimarstop_last_name',$last_name);
                         update_user_meta($user_id,'bimarstop_birth_date_shamsi',$birth_date);
