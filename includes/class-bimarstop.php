@@ -203,7 +203,6 @@ final class Plugin {
                     }
                 }
             }
-        }
 
         ob_start(); ?>
         <div class="bimarstop-auth-card" dir="rtl">
