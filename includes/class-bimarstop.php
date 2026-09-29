@@ -184,16 +184,15 @@ final class Plugin {
                 $national_code=$this->normalize_profile_digits(preg_replace('/\\D+/','',(string)wp_unslash($_POST['national_code']??'')));
                 $first_name=sanitize_text_field(wp_unslash($_POST['first_name']??''));
                 $last_name=sanitize_text_field(wp_unslash($_POST['last_name']??''));
-                $birth_date=$this->normalize_profile_digits(sanitize_text_field(wp_unslash($_POST['birth_date']??'')));
-                $birth_date=preg_replace('/[-.]/','/',$birth_date);
+                $birth_year=(int)wp_unslash($_POST['birth_year']??0);
+                $birth_month=(int)wp_unslash($_POST['birth_month']??0);
+                $birth_day=(int)wp_unslash($_POST['birth_day']??0);
+                $birth_date=sprintf('%04d/%02d/%02d',$birth_year,$birth_month,$birth_day);
 
                 if(!$this->valid_national_code($national_code)) $error='کد ملی معتبر نیست.';
                 elseif($first_name==='' || $last_name==='') $error='نام و نام خانوادگی را کامل وارد کنید.';
-                elseif(!preg_match('/^\\d{4}\\/\\d{2}\\/\\d{2}$/',$birth_date)) $error='تاریخ تولد را به صورت ۱۴۰۰/۰۱/۰۱ وارد کنید.';
+                elseif($birth_year<1300 || $birth_year>1500 || $birth_month<1 || $birth_month>12 || $birth_day<1 || $birth_day>31) $error='تاریخ تولد شمسی معتبر نیست.';
                 else {
-                    $parts=explode('/',$birth_date);
-                    $y=(int)$parts[0]; $m=(int)$parts[1]; $d=(int)$parts[2];
-                    if($y<1300 || $y>1500 || $m<1 || $m>12 || $d<1 || $d>31) $error='تاریخ تولد شمسی معتبر نیست.';
                     else {
                         update_user_meta($user_id,'bimarstop_national_code',$national_code);
                         update_user_meta($user_id,'bimarstop_first_name',$first_name);
@@ -220,13 +219,17 @@ final class Plugin {
             <form method="post">
                 <?php wp_nonce_field('bimarstop_complete_profile','bimarstop_profile_nonce'); ?>
                 <label class="bimarstop-auth-label">کد ملی</label>
-                <input class="bimarstop-auth-field" name="national_code" type="tel" inputmode="numeric" maxlength="10" required value="<?php echo esc_attr($_POST['national_code']??''); ?>" placeholder="0012345678">
+                <input class="bimarstop-auth-field" name="national_code" type="tel" inputmode="numeric" maxlength="10" required value="<?php echo esc_attr($_POST['national_code']??''); ?>" placeholder="۰۰۱۲۳۴۵۶۷۸" dir="ltr" oninput="this.value=this.value.replace(/[۰-۹٠-٩]/g,function(d){return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)>-1?'۰۱۲۳۴۵۶۷۸۹'.indexOf(d):'۰۱۲۳۴۵۶۷۸۹'.indexOf(d);})">
                 <label class="bimarstop-auth-label">نام</label>
                 <input class="bimarstop-auth-field" name="first_name" type="text" required value="<?php echo esc_attr($_POST['first_name']??''); ?>" placeholder="نام">
                 <label class="bimarstop-auth-label">نام خانوادگی</label>
                 <input class="bimarstop-auth-field" name="last_name" type="text" required value="<?php echo esc_attr($_POST['last_name']??''); ?>" placeholder="نام خانوادگی">
                 <label class="bimarstop-auth-label">تاریخ تولد (شمسی)</label>
-                <input class="bimarstop-auth-field" name="birth_date" type="text" inputmode="numeric" maxlength="10" required value="<?php echo esc_attr($_POST['birth_date']??''); ?>" placeholder="۱۴۰۰/۰۱/۰۱">
+                <div class="bimarstop-birthdate-picker" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+                    <select class="bimarstop-auth-field" name="birth_year" required aria-label="سال تولد"><option value="">سال</option><?php for($y=1300;$y<=1500;$y++): ?><option value="<?php echo $y; ?>"><?php echo $this->normalize_profile_digits((string)$y); ?></option><?php endfor; ?></select>
+                    <select class="bimarstop-auth-field" name="birth_month" required aria-label="ماه تولد"><option value="">ماه</option><?php for($m=1;$m<=12;$m++): ?><option value="<?php echo $m; ?>"><?php echo $this->normalize_profile_digits(sprintf('%02d',$m)); ?></option><?php endfor; ?></select>
+                    <select class="bimarstop-auth-field" name="birth_day" required aria-label="روز تولد"><option value="">روز</option><?php for($d=1;$d<=31;$d++): ?><option value="<?php echo $d; ?>"><?php echo $this->normalize_profile_digits(sprintf('%02d',$d)); ?></option><?php endfor; ?></select>
+                </div>
                 <button class="bimarstop-auth-btn" type="submit" name="bimarstop_profile_submit">ذخیره و ورود به پنل</button>
             </form>
         </div>
