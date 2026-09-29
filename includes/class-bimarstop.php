@@ -57,6 +57,7 @@ final class Plugin {
         add_filter('show_admin_bar', [$this, 'show_admin_bar']);
         add_filter('pre_user_role', [$this, 'force_patient_registration_role'], 10, 2);
         add_action('admin_menu', [$this, 'restrict_role_admin_menu'], 999);
+        add_action('admin_init', [$this, 'redirect_patient_dashboard']);
     }
 
     public static function activate(): void {
@@ -114,11 +115,11 @@ final class Plugin {
 
     private static function register_bimarstop_roles(): void {
         $patient = get_role('bimarstop_patient');
-        if (!$patient) add_role('bimarstop_patient', 'مریض', ['read' => true]);
+        if (!$patient) add_role('bimarstop_patient', 'بیمار', ['read' => true]);
         $doctor = get_role('bimarstop_doctor');
         if (!$doctor) add_role('bimarstop_doctor', 'پزشک', ['read' => true]);
         $operator = get_role('bimarstop_operator');
-        if (!$operator) add_role('bimarstop_operator', 'اوپراتور', ['read' => true]);
+        if (!$operator) add_role('bimarstop_operator', 'اپراتور', ['read' => true]);
         $admin = get_role('administrator');
         if ($admin) {
             // ادمین اصلی همان نقش استاندارد Administrator وردپرس است.
@@ -265,10 +266,22 @@ final class Plugin {
         return is_admin() ? $role : 'bimarstop_patient';
     }
 
+    public function redirect_patient_dashboard(): void {
+        if (!is_user_logged_in() || $this->current_role() !== 'bimarstop_patient') return;
+        global $pagenow;
+        if ($pagenow === 'index.php') {
+            wp_safe_redirect(admin_url('admin.php?page=bimarstop-chat'));
+            exit;
+        }
+    }
+
     public function restrict_role_admin_menu(): void {
         if (!is_user_logged_in() || current_user_can('manage_options')) return;
         $role = $this->current_role();
         if ($role === 'bimarstop_patient' || $role === 'bimarstop_doctor' || $role === 'bimarstop_operator') {
+            if ($role === 'bimarstop_patient') {
+                remove_menu_page('index.php');
+            }
             $menus = [
                 'about.php',
                 'edit.php',
@@ -534,9 +547,11 @@ final class Plugin {
     public function admin_menu(): void {
         $role = $this->current_role();
 
-        // مریض فقط یک بخش دارد: چت با اوپراتور.
+        // بیمار فقط چت با اپراتور و گزارش مشکل را می‌بیند.
         if ($role === 'bimarstop_patient') {
-            add_menu_page('چت با اوپراتور', 'چت با اوپراتور', 'read', 'bimarstop-chat', [$this, 'patient_chat_page'], 'dashicons-format-chat', 25);
+            add_menu_page('بیمار استاپ', 'بیمار استاپ', 'read', 'bimarstop-chat', [$this, 'patient_chat_page'], 'dashicons-format-chat', 25);
+            add_submenu_page('bimarstop-chat', 'چت با اپراتور', 'چت با اپراتور', 'read', 'bimarstop-chat', [$this, 'patient_chat_page']);
+            add_submenu_page('bimarstop-chat', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
             return;
         }
 
@@ -544,7 +559,7 @@ final class Plugin {
             add_menu_page('BimarStop', 'BimarStop', 'read', 'bimarstop', [$this, 'doctor_dashboard'], 'dashicons-heart', 25);
             add_submenu_page('bimarstop', 'داشبورد', 'داشبورد', 'read', 'bimarstop', [$this, 'doctor_dashboard']);
             add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
-            add_submenu_page('bimarstop', 'چت با اوپراتورها', 'چت با اوپراتورها', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page']);
+            add_submenu_page('bimarstop', 'چت با اپراتورها', 'چت با اپراتورها', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page']);
             return;
         }
 
@@ -553,7 +568,7 @@ final class Plugin {
             add_submenu_page('bimarstop', 'داشبورد', 'داشبورد', 'read', 'bimarstop', [$this, 'operator_dashboard']);
             add_submenu_page('bimarstop', 'صف ورودی', 'صف ورودی', 'read', 'bimarstop-queue', [$this, 'operator_chat_queue']);
             add_submenu_page('bimarstop', 'بیماران', 'بیماران', 'read', 'bimarstop-patients', [$this, 'patients_page']);
-            add_submenu_page('bimarstop', 'چت با مریض', 'چت با مریض', 'read', 'bimarstop-chat', [$this, 'operator_chat_page']);
+            add_submenu_page('bimarstop', 'چت با بیمار', 'چت با بیمار', 'read', 'bimarstop-chat', [$this, 'operator_chat_page']);
             add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'documents_page']);
             add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
             add_submenu_page('bimarstop', 'چت با پزشکان', 'چت با پزشکان', 'read', 'bimarstop-doctor-chats', [$this, 'operator_private_chats_page']);
@@ -566,7 +581,7 @@ final class Plugin {
         add_submenu_page('bimarstop', 'داشبورد', 'داشبورد', 'manage_options', 'bimarstop', [$this, 'admin_dashboard']);
         add_submenu_page('bimarstop', 'بیماران', 'بیماران', 'manage_options', 'bimarstop-patients', [$this, 'patients_page']);
         add_submenu_page('bimarstop', 'پزشکان', 'پزشکان', 'manage_options', 'bimarstop-doctors', [$this, 'doctors_page']);
-        add_submenu_page('bimarstop', 'اوپراتورها', 'اوپراتورها', 'manage_options', 'bimarstop-operators', [$this, 'operators_page']);
+        add_submenu_page('bimarstop', 'اپراتورها', 'اپراتورها', 'manage_options', 'bimarstop-operators', [$this, 'operators_page']);
         add_submenu_page('bimarstop', 'چت اپراتورها', 'چت اپراتورها', 'manage_options', 'bimarstop-chat', [$this, 'operator_chat_queue']);
         add_submenu_page('bimarstop', 'چت داخلی', 'چت داخلی', 'manage_options', 'bimarstop-private-chats', [$this, 'admin_private_chats_page']);
         add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'manage_options', 'bimarstop-documents', [$this, 'documents_page']);
@@ -583,7 +598,7 @@ final class Plugin {
     }
 
     public function patient_dashboard(): void {
-        echo '<div class="wrap" dir="rtl"><h1>🏥 پنل مریض</h1><p>از منوی BimarStop می‌توانید با اپراتور گفتگو کنید.</p></div>';
+        echo '<div class="wrap" dir="rtl"><h1>🏥 پنل بیمار</h1><p>از منوی BimarStop می‌توانید با اپراتور گفتگو کنید.</p></div>';
     }
 
     public function doctor_dashboard(): void {
@@ -592,7 +607,7 @@ final class Plugin {
 
     public function operator_dashboard(): void {
         $online = (bool) get_user_meta(get_current_user_id(), 'bimarstop_operator_online', true);
-        echo '<div class="wrap" dir="rtl"><h1>👨‍💻 پنل اوپراتور</h1>';
+        echo '<div class="wrap" dir="rtl"><h1>👨‍💻 پنل اپراتور</h1>';
         echo '<p>وضعیت فعلی: <strong>' . ($online ? 'آنلاین 🟢' : 'آفلاین ⚪') . '</strong></p>';
         echo '<button type="button" class="button button-primary" id="bimarstop-toggle-status">' . ($online ? 'آفلاین شوم' : 'آنلاین شوم') . '</button>';
         echo '<div id="bimarstop-status-result" style="margin-top:12px"></div>';
@@ -641,14 +656,14 @@ final class Plugin {
         $this->users_table('bimarstop_patient','🧑‍⚕️ بیماران');
     }
     public function doctors_page(): void { $this->users_table('bimarstop_doctor','🩺 پزشکان'); }
-    public function operators_page(): void { $this->users_table('bimarstop_operator','👨‍💻 اوپراتورها'); }
+    public function operators_page(): void { $this->users_table('bimarstop_operator','👨‍💻 اپراتورها'); }
 
     public function patient_chat_page(): void {
         if (!current_user_can('read')) return;
         $online = get_users(['role'=>'bimarstop_operator','meta_key'=>'bimarstop_operator_online','meta_value'=>'1','number'=>1]);
-        $notice = $online ? '' : '<div class="bimar-chat-offline">فعلاً همه اوپراتورها آفلاین هستند؛ پیام شما ثبت می‌شود و پس از آنلاین شدن پاسخ داده می‌شود.</div>';
+        $notice = $online ? '' : '<div class="bimar-chat-offline">فعلاً همه اپراتورها آفلاین هستند؛ پیام شما ثبت می‌شود و پس از آنلاین شدن پاسخ داده می‌شود.</div>';
         echo '<div class="bimar-chat-page" dir="rtl">';
-        echo '<div class="bimar-chat-header"><div><span class="bimar-chat-kicker">BimarStop • پشتیبانی</span><h1>💬 گفت‌وگو با اوپراتور</h1><p>پرسش، توضیح مشکل یا ارسال مدارک را همین‌جا انجام دهید.</p></div><div class="bimar-chat-live">'.($online ? '<i></i> اوپراتور آنلاین' : '<i class="off"></i> آفلاین').'</div></div>';
+        echo '<div class="bimar-chat-header"><div><span class="bimar-chat-kicker">BimarStop • پشتیبانی</span><h1>💬 گفت‌وگو با اپراتور</h1><p>پرسش، توضیح مشکل یا ارسال مدارک را همین‌جا انجام دهید.</p></div><div class="bimar-chat-live">'.($online ? '<i></i> اپراتور آنلاین' : '<i class="off"></i> آفلاین').'</div></div>';
         echo $notice;
         echo '<div class="bimar-chat-shell">';
         echo '<aside class="bimar-chat-side"><div class="bimar-chat-side-title">گفت‌وگوی شما</div><div class="bimar-chat-tab active">💬 پشتیبانی</div><div class="bimar-chat-side-info">🔒 این گفتگو خصوصی است<br><span>فایل‌های PDF، JPG، PNG و DOCX تا ۱۰ مگابایت قابل ارسال‌اند.</span></div></aside>';
@@ -667,7 +682,7 @@ final class Plugin {
         }
         $thread = $tid ? $wpdb->get_row($wpdb->prepare("SELECT t.*,u.display_name FROM {$wpdb->prefix}bimarstop_chat_threads t JOIN {$wpdb->users} u ON u.ID=t.patient_id WHERE t.id=%d",$tid)) : null;
         echo '<div class="bimar-chat-page" dir="rtl">';
-        echo '<div class="bimar-chat-header"><div><span class="bimar-chat-kicker">BimarStop • پشتیبانی</span><h1>💬 گفت‌وگو با مریض</h1><p>'.($thread ? 'در حال پاسخ‌گویی به '.esc_html($thread->display_name) : 'یک گفتگو را از صف چت انتخاب کنید.').'</p></div><a class="bimar-chat-back" href="'.esc_url(admin_url('admin.php?page=bimarstop-queue')).'">← صف گفتگوها</a></div>';
+        echo '<div class="bimar-chat-header"><div><span class="bimar-chat-kicker">BimarStop • پشتیبانی</span><h1>💬 گفت‌وگو با بیمار</h1><p>'.($thread ? 'در حال پاسخ‌گویی به '.esc_html($thread->display_name) : 'یک گفتگو را از صف چت انتخاب کنید.').'</p></div><a class="bimar-chat-back" href="'.esc_url(admin_url('admin.php?page=bimarstop-queue')).'">← صف گفتگوها</a></div>';
         if (!$thread) { echo '<div class="bimar-chat-empty">یک گفتگو را از «صف ورودی» انتخاب کنید.</div></div>'; return; }
         echo '<div class="bimar-chat-shell"><aside class="bimar-chat-side"><div class="bimar-chat-side-title">مکالمه فعال</div><div class="bimar-chat-tab active">🧑 '.esc_html($thread->display_name).'</div><div class="bimar-chat-side-info">📎 ارسال فایل فعال است<br><span>فایل‌های PDF، JPG، PNG و DOCX تا ۱۰ مگابایت.</span></div></aside>';
         echo '<main class="bimar-chat-main"><div id="bimarstop-chat-box" class="bimar-chat-box"></div><div id="bimar-chat-attachment" class="bimar-chat-attachment" hidden><span>📎 <b id="bimar-file-name"></b></span><button type="button" id="bimar-file-remove">×</button></div><div class="bimar-chat-composer"><label class="bimar-attach"><input id="bimarstop-chat-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden>📎</label><textarea id="bimarstop-chat-input" rows="1" placeholder="پاسخ خود را بنویسید..."></textarea><button id="bimarstop-send" class="bimar-send">➤</button><div class="bimar-chat-hint">Enter برای ارسال • Shift+Enter برای خط جدید</div></div></main></div></div>';
@@ -678,8 +693,8 @@ final class Plugin {
         if (!current_user_can('read')) return;
         global $wpdb;
         $threads=$wpdb->get_results("SELECT t.*, u.display_name FROM {$wpdb->prefix}bimarstop_chat_threads t LEFT JOIN {$wpdb->users} u ON u.ID=t.patient_id WHERE t.status='open' ORDER BY t.updated_at DESC");
-        echo '<div class="wrap" dir="rtl"><h1>💬 صف چت</h1><table class="widefat striped"><thead><tr><th>مریض</th><th>وضعیت</th><th>آخرین بروزرسانی</th><th>عملیات</th></tr></thead><tbody>';
-        foreach($threads as $t) echo '<tr><td>'.esc_html($t->display_name).'</td><td>'.($t->operator_id?'در حال پاسخ':'منتظر اوپراتور').'</td><td>'.esc_html($t->updated_at).'</td><td><a class="button" href="'.esc_url(admin_url('admin.php?page=bimarstop-chat&thread='.(int)$t->id)).'">باز کردن چت</a></td></tr>';
+        echo '<div class="wrap" dir="rtl"><h1>💬 صف چت</h1><table class="widefat striped"><thead><tr><th>بیمار</th><th>وضعیت</th><th>آخرین بروزرسانی</th><th>عملیات</th></tr></thead><tbody>';
+        foreach($threads as $t) echo '<tr><td>'.esc_html($t->display_name).'</td><td>'.($t->operator_id?'در حال پاسخ':'منتظر اپراتور').'</td><td>'.esc_html($t->updated_at).'</td><td><a class="button" href="'.esc_url(admin_url('admin.php?page=bimarstop-chat&thread='.(int)$t->id)).'">باز کردن چت</a></td></tr>';
         if(!$threads) echo '<tr><td colspan="3">چتی در صف نیست.</td></tr>';
         echo '</tbody></table></div>';
     }
@@ -885,7 +900,7 @@ final class Plugin {
         $partner=get_userdata($partner_id);$thread=$this->get_or_create_private_thread($uid,$partner_id);
         if(!$thread){echo '<div class="wrap" dir="rtl"><p>خطا در ساخت گفتگو.</p></div>';return;}
         echo '<div class="bimar-chat-page" dir="rtl"><div class="bimar-chat-header"><div><span class="bimar-chat-kicker">BimarStop • ارتباط داخلی</span><h1>💬 گفتگوی خصوصی</h1><p>با '.esc_html($partner->display_name?:$partner->user_login).'</p></div><a class="bimar-chat-back" href="'.esc_url(admin_url('admin.php?page='.$back_page)).'">← بازگشت</a></div>';
-        echo '<div class="bimar-chat-shell"><aside class="bimar-chat-side"><div class="bimar-chat-side-title">گفتگوی داخلی</div><div class="bimar-chat-tab active">💬 '.esc_html($partner->display_name?:$partner->user_login).'</div><div class="bimar-chat-side-info">🔒 گفتگوی خصوصی پزشک و اوپراتور<br><span>فایل‌های PDF، JPG، PNG و DOCX تا ۱۰ مگابایت.</span></div></aside><main class="bimar-chat-main"><div id="bimarstop-private-box" class="bimar-chat-box"></div><div id="bimar-private-attachment" class="bimar-chat-attachment" hidden><span>📎 <b id="bimar-private-file-name"></b></span><button type="button" id="bimar-private-file-remove">×</button></div><div class="bimar-chat-composer"><label class="bimar-attach"><input id="bimarstop-private-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden>📎</label>'.($this->can_use_documents() ? '<select id="bimarstop-private-document" title="انتخاب مدرک موجود"><option value="">📚 مدرک موجود</option></select>' : '').'<textarea id="bimarstop-private-input" rows="1" placeholder="پیام خود را بنویسید..."></textarea><button type="button" id="bimarstop-private-send" class="bimar-send">➤</button><div class="bimar-chat-hint">Enter برای ارسال • Shift+Enter برای خط جدید</div></div></main></div></div>';
+        echo '<div class="bimar-chat-shell"><aside class="bimar-chat-side"><div class="bimar-chat-side-title">گفتگوی داخلی</div><div class="bimar-chat-tab active">💬 '.esc_html($partner->display_name?:$partner->user_login).'</div><div class="bimar-chat-side-info">🔒 گفتگوی خصوصی پزشک و اپراتور<br><span>فایل‌های PDF، JPG، PNG و DOCX تا ۱۰ مگابایت.</span></div></aside><main class="bimar-chat-main"><div id="bimarstop-private-box" class="bimar-chat-box"></div><div id="bimar-private-attachment" class="bimar-chat-attachment" hidden><span>📎 <b id="bimar-private-file-name"></b></span><button type="button" id="bimar-private-file-remove">×</button></div><div class="bimar-chat-composer"><label class="bimar-attach"><input id="bimarstop-private-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden>📎</label>'.($this->can_use_documents() ? '<select id="bimarstop-private-document" title="انتخاب مدرک موجود"><option value="">📚 مدرک موجود</option></select>' : '').'<textarea id="bimarstop-private-input" rows="1" placeholder="پیام خود را بنویسید..."></textarea><button type="button" id="bimarstop-private-send" class="bimar-send">➤</button><div class="bimar-chat-hint">Enter برای ارسال • Shift+Enter برای خط جدید</div></div></main></div></div>';
         $nonce=wp_create_nonce('bimarstop_private_chat');$ajax=admin_url('admin-ajax.php');
         echo '<script>(function(){var box=document.getElementById("bimarstop-private-box"),input=document.getElementById("bimarstop-private-input"),send=document.getElementById("bimarstop-private-send"),file=document.getElementById("bimarstop-private-file"),att=document.getElementById("bimar-private-attachment"),fn=document.getElementById("bimar-private-file-name"),rm=document.getElementById("bimar-private-file-remove"),docSelect=document.getElementById("bimarstop-private-document"),last=0;
         function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML;}function render(m){var row=document.createElement("div");row.className="bimar-msg "+(m.mine?"mine":"theirs");var b=document.createElement("div");b.className="bimar-msg-bubble";var s=document.createElement("div");s.className="bimar-msg-sender";s.textContent=m.sender;b.appendChild(s);if(m.message){var x=document.createElement("div");x.className="bimar-msg-text";x.textContent=m.message;b.appendChild(x);}if(m.attachment){var a=document.createElement("a");a.className="bimar-file-card";a.href=m.attachment.url;a.innerHTML="<span class=\"bimar-file-icon\">📎</span><span><b>"+esc(m.attachment.name)+"</b><small>"+esc(m.attachment.size)+"</small></span><strong>دانلود</strong>";b.appendChild(a);}var tm=document.createElement("div");tm.className="bimar-msg-time";tm.textContent=m.time||"";b.appendChild(tm);row.appendChild(b);box.appendChild(row);}
@@ -912,9 +927,9 @@ final class Plugin {
         $partner = absint($_GET['user'] ?? 0);
         if ($partner) { $this->render_private_chat($partner, 'bimarstop-doctor-chats'); return; }
         $operators = $this->users_by_role('bimarstop_operator');
-        echo '<div class="wrap" dir="rtl"><h1>👨‍💻 چت خصوصی با اوپراتورها</h1><table class="widefat striped"><thead><tr><th>اوپراتور</th><th>وضعیت</th><th>ایمیل</th><th>عملیات</th></tr></thead><tbody>';
+        echo '<div class="wrap" dir="rtl"><h1>👨‍💻 چت خصوصی با اپراتورها</h1><table class="widefat striped"><thead><tr><th>اپراتور</th><th>وضعیت</th><th>ایمیل</th><th>عملیات</th></tr></thead><tbody>';
         foreach ($operators as $u) { $online = get_user_meta($u->ID, 'bimarstop_operator_online', true) === '1'; echo '<tr><td>'.esc_html($u->display_name ?: $u->user_login).'</td><td>'.($online?'آنلاین 🟢':'آفلاین ⚪').'</td><td>'.esc_html($u->user_email).'</td><td><a class="button button-primary" href="'.esc_url(admin_url('admin.php?page=bimarstop-doctor-chats&user='.(int)$u->ID)).'">شروع / ادامه چت</a></td></tr>'; }
-        if (!$operators) echo '<tr><td colspan="4">اوپراتوری ثبت نشده است.</td></tr>';
+        if (!$operators) echo '<tr><td colspan="4">اپراتوری ثبت نشده است.</td></tr>';
         echo '</tbody></table></div>';
     }
 
@@ -930,7 +945,7 @@ final class Plugin {
             }
         }
         $rows = $wpdb->get_results("SELECT t.*, a.display_name AS a_name, b.display_name AS b_name FROM {$wpdb->prefix}bimarstop_private_threads t LEFT JOIN {$wpdb->users} a ON a.ID=t.user_a_id LEFT JOIN {$wpdb->users} b ON b.ID=t.user_b_id ORDER BY t.updated_at DESC");
-        echo '<div class="wrap" dir="rtl"><h1>💬 چت‌های داخلی</h1><p>گفتگوهای خصوصی پزشک و اوپراتور.</p><table class="widefat striped"><thead><tr><th>کاربر اول</th><th>کاربر دوم</th><th>وضعیت</th><th>آخرین بروزرسانی</th><th>عملیات</th></tr></thead><tbody>';
+        echo '<div class="wrap" dir="rtl"><h1>💬 چت‌های داخلی</h1><p>گفتگوهای خصوصی پزشک و اپراتور.</p><table class="widefat striped"><thead><tr><th>کاربر اول</th><th>کاربر دوم</th><th>وضعیت</th><th>آخرین بروزرسانی</th><th>عملیات</th></tr></thead><tbody>';
         foreach ($rows as $r) echo '<tr><td>'.esc_html($r->a_name).'</td><td>'.esc_html($r->b_name).'</td><td>'.esc_html($r->status).'</td><td>'.esc_html($r->updated_at).'</td><td><a class="button" href="'.esc_url(admin_url('admin.php?page=bimarstop-private-chats&thread='.(int)$r->id)).'">مشاهده</a></td></tr>';
         if (!$rows) echo '<tr><td colspan="5">هنوز چت داخلی‌ای وجود ندارد.</td></tr>';
         echo '</tbody></table></div>';
@@ -1095,9 +1110,9 @@ final class Plugin {
             $renderFolder(0);
             echo '</div>';
 
-            echo '<div id="bimar-doc-send-box" style="display:none;background:#fff;border:1px solid #ddd;border-radius:14px;padding:18px;max-width:650px"><h2>📤 ارسال مدرک</h2><input type="hidden" id="bimar-share-doc"><p><label>گیرنده<br><select id="bimar-share-recipient" style="min-width:320px"><option value="">انتخاب مریض یا پزشک</option>';
+            echo '<div id="bimar-doc-send-box" style="display:none;background:#fff;border:1px solid #ddd;border-radius:14px;padding:18px;max-width:650px"><h2>📤 ارسال مدرک</h2><input type="hidden" id="bimar-share-doc"><p><label>گیرنده<br><select id="bimar-share-recipient" style="min-width:320px"><option value="">انتخاب بیمار یا پزشک</option>';
             $recipients=get_users(['role__in'=>['bimarstop_patient','bimarstop_doctor'],'orderby'=>'display_name','order'=>'ASC']);
-            foreach($recipients as $u) echo '<option value="'.(int)$u->ID.'">'.esc_html($u->display_name?:$u->user_login).' — '.esc_html(in_array('bimarstop_doctor',$u->roles,true)?'پزشک':'مریض').'</option>';
+            foreach($recipients as $u) echo '<option value="'.(int)$u->ID.'">'.esc_html($u->display_name?:$u->user_login).' — '.esc_html(in_array('bimarstop_doctor',$u->roles,true)?'پزشک':'بیمار').'</option>';
             echo '</select></label></p><p><label>توضیح (اختیاری)<br><textarea id="bimar-share-note" rows="3" style="width:100%"></textarea></label></p><p><button type="button" class="button button-primary" id="bimar-share-submit">ارسال</button> <button type="button" class="button" id="bimar-share-cancel">انصراف</button></p></div>';
 
             $nonce=wp_create_nonce('bimarstop_chat');$ajax=admin_url('admin-ajax.php');
@@ -1171,7 +1186,7 @@ final class Plugin {
     }
 
     public function ajax_rename_document(): void {
-        if($this->current_role()!=='bimarstop_operator') wp_send_json_error(['message'=>'فقط اوپراتور می‌تواند نام فایل را تغییر دهد.']);
+        if($this->current_role()!=='bimarstop_operator') wp_send_json_error(['message'=>'فقط اپراتور می‌تواند نام فایل را تغییر دهد.']);
         check_ajax_referer('bimarstop_chat','nonce');
         global $wpdb;
         $id=absint($_POST['document_id']??0);
@@ -1202,7 +1217,7 @@ final class Plugin {
     }
 
     public function ajax_add_document_folder(): void {
-        if($this->current_role()!=='bimarstop_operator') wp_send_json_error(['message'=>'فقط اوپراتور می‌تواند پوشه بسازد.']);
+        if($this->current_role()!=='bimarstop_operator') wp_send_json_error(['message'=>'فقط اپراتور می‌تواند پوشه بسازد.']);
         check_ajax_referer('bimarstop_chat','nonce');
         global $wpdb;
         $name=sanitize_text_field(wp_unslash($_POST['name']??''));
@@ -1243,7 +1258,7 @@ final class Plugin {
     }
 
     public function ajax_move_document_folder(): void {
-        if($this->current_role()!=='bimarstop_operator') wp_send_json_error(['message'=>'فقط اوپراتور می‌تواند پوشه‌ها را جابه‌جا کند.']);
+        if($this->current_role()!=='bimarstop_operator') wp_send_json_error(['message'=>'فقط اپراتور می‌تواند پوشه‌ها را جابه‌جا کند.']);
         check_ajax_referer('bimarstop_chat','nonce');
         global $wpdb;
         $id=absint($_POST['folder_id']??0);
@@ -1278,7 +1293,7 @@ final class Plugin {
     }
 
     public function ajax_move_document(): void {
-        if($this->current_role()!=='bimarstop_operator') wp_send_json_error(['message'=>'فقط اوپراتور به مدارک دسترسی دارد.']);
+        if($this->current_role()!=='bimarstop_operator') wp_send_json_error(['message'=>'فقط اپراتور به مدارک دسترسی دارد.']);
         check_ajax_referer('bimarstop_chat','nonce');
         global $wpdb;
         $id=absint($_POST['document_id']??0);$cat=absint($_POST['category_id']??0);
@@ -1288,7 +1303,7 @@ final class Plugin {
     }
 
     public function ajax_share_document(): void {
-        if($this->current_role()!=='bimarstop_operator') wp_send_json_error(['message'=>'فقط اوپراتور می‌تواند مدرک ارسال کند.']);
+        if($this->current_role()!=='bimarstop_operator') wp_send_json_error(['message'=>'فقط اپراتور می‌تواند مدرک ارسال کند.']);
         check_ajax_referer('bimarstop_chat','nonce');
         global $wpdb;
 
@@ -1317,7 +1332,7 @@ final class Plugin {
         $message_text=$note;
         $now=current_time('mysql');
 
-        // بیمار: مدرک دقیقاً داخل همان چت بیمار ↔ اوپراتور ارسال می‌شود.
+        // بیمار: مدرک دقیقاً داخل همان چت بیمار ↔ اپراتور ارسال می‌شود.
         if(in_array('bimarstop_patient',$recipient->roles,true)){
             $threads=$wpdb->prefix.'bimarstop_chat_threads';
             $thread=$wpdb->get_row($wpdb->prepare(
@@ -1354,7 +1369,7 @@ final class Plugin {
 
             $chat_message_id=(int)$wpdb->insert_id;
         } else {
-            // پزشک: مدرک دقیقاً داخل همان چت خصوصی پزشک ↔ اوپراتور ارسال می‌شود.
+            // پزشک: مدرک دقیقاً داخل همان چت خصوصی پزشک ↔ اپراتور ارسال می‌شود.
             $thread=$this->get_or_create_private_thread($uid,$rid);
             if(!$thread) wp_send_json_error(['message'=>'گفتگوی پزشک پیدا یا ایجاد نشد.']);
 
