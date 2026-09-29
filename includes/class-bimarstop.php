@@ -568,6 +568,7 @@ final class Plugin {
             add_submenu_page('bimarstop', 'داشبورد', 'داشبورد', 'read', 'bimarstop', [$this, 'operator_dashboard']);
             add_submenu_page('bimarstop', 'صف ورودی', 'صف ورودی', 'read', 'bimarstop-queue', [$this, 'operator_chat_queue']);
             add_submenu_page('bimarstop', 'بیماران', 'بیماران', 'read', 'bimarstop-patients', [$this, 'patients_page']);
+            add_submenu_page('bimarstop', 'پزشکان', 'پزشکان', 'read', 'bimarstop-doctors', [$this, 'doctors_page']);
             add_submenu_page('bimarstop', 'چت با بیمار', 'چت با بیمار', 'read', 'bimarstop-chat', [$this, 'operator_chat_page']);
             add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'documents_page']);
             add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
@@ -622,31 +623,76 @@ final class Plugin {
     }
 
     private function users_table(string $role, string $title): void {
-        if (!current_user_can('manage_options')) return;
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bimarstop_create_user']) && check_admin_referer('bimarstop_create_user')) {
-            $login = sanitize_user(wp_unslash($_POST['user_login'] ?? ''));
-            $email = sanitize_email(wp_unslash($_POST['user_email'] ?? ''));
-            $pass = (string) ($_POST['user_pass'] ?? '');
-            $name = sanitize_text_field(wp_unslash($_POST['display_name'] ?? ''));
-            if ($login && $email && strlen($pass) >= 8 && !username_exists($login) && !email_exists($email)) {
-                $id = wp_create_user($login, $pass, $email);
-                if (!is_wp_error($id)) {
-                    wp_update_user(['ID'=>$id,'display_name'=>$name,'role'=>$role]);
-                    echo '<div class="notice notice-success"><p>کاربر ساخته شد.</p></div>';
-                }
+        $is_admin = current_user_can('manage_options');
+        $is_operator = $this->current_role() === 'bimarstop_operator';
+
+        // فقط ادمین می‌تواند اپراتور بسازد؛ ادمین و اپراتور می‌توانند بیمار/پزشک بسازند.
+        $allowed = in_array($role, ['bimarstop_patient', 'bimarstop_doctor'], true)
+            ? ($is_admin || $is_operator)
+            : ($role === 'bimarstop_operator' && $is_admin);
+        if (!$allowed) return;
+
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bimarstop_create_user'])) {
+            if (!check_admin_referer('bimarstop_create_user')) {
+                echo '<div class="notice notice-error"><p>درخواست نامعتبر است.</p></div>';
             } else {
-                echo '<div class="notice notice-error"><p>نام کاربری/ایمیل تکراری است یا رمز عبور کمتر از ۸ کاراکتر است.</p></div>';
+                $mobile = $this->normalize_mobile(sanitize_text_field(wp_unslash($_POST['user_mobile'] ?? '')));
+                $name = sanitize_text_field(wp_unslash($_POST['display_name'] ?? ''));
+
+                if (!$this->valid_mobile($mobile)) {
+                    echo '<div class="notice notice-error"><p>شماره موبایل معتبر نیست. نمونه: 09123456789</p></div>';
+                } elseif (get_users(['meta_key'=>'bimarstop_mobile','meta_value'=>$mobile,'number'=>1,'fields'=>'ID'])) {
+                    echo '<div class="notice notice-error"><p>این شماره موبایل قبلاً برای یک حساب استفاده شده است.</p></div>';
+                } else {
+                    $login = 'mobile_' . substr($mobile, 1);
+                    $base_login = $login;
+                    $suffix = 1;
+                    while (username_exists($login)) {
+                        $login = $base_login . '_' . $suffix++;
+                    }
+
+                    $email = $mobile . '@bimarstop.local';
+                    while (email_exists($email)) {
+                        $email = $mobile . '_' . $suffix++ . '@bimarstop.local';
+                    }
+
+                    $id = wp_create_user($login, wp_generate_password(32, true, true), $email);
+                    if (is_wp_error($id)) {
+                        echo '<div class="notice notice-error"><p>ساخت حساب ناموفق بود: ' . esc_html($id->get_error_message()) . '</p></div>';
+                    } else {
+                        $display_name = $name !== '' ? $name : $mobile;
+                        wp_update_user([
+                            'ID' => $id,
+                            'display_name' => $display_name,
+                            'role' => $role,
+                        ]);
+                        update_user_meta($id, 'bimarstop_mobile', $mobile);
+
+                        echo '<div class="notice notice-success"><p>حساب ' . esc_html($role === 'bimarstop_doctor' ? 'پزشک' : 'بیمار') . ' با موفقیت ساخته شد. ورود با شماره موبایل و کد پیامکی انجام می‌شود.</p></div>';
+                    }
+                }
             }
         }
+
         $users = $this->users_by_role($role);
         echo '<div class="wrap" dir="rtl"><h1>' . esc_html($title) . '</h1>';
-        echo '<h2>ساخت کاربر</h2><form method="post"><input type="hidden" name="bimarstop_create_user" value="1">';
+        echo '<div class="card" style="max-width:700px;padding:20px;margin-top:20px">';
+        echo '<h2>➕ ساخت ' . esc_html($role === 'bimarstop_doctor' ? 'پزشک' : ($role === 'bimarstop_patient' ? 'بیمار' : 'اپراتور')) . '</h2>';
+        echo '<p>برای این حساب فقط شماره موبایل لازم است؛ رمز عبور و ایمیل وارد نمی‌شود.</p>';
+        echo '<form method="post">';
         wp_nonce_field('bimarstop_create_user');
-        echo '<p><input required name="user_login" placeholder="نام کاربری"></p><p><input required type="email" name="user_email" placeholder="ایمیل"></p><p><input required type="password" name="user_pass" minlength="8" placeholder="رمز عبور"></p><p><input name="display_name" placeholder="نام نمایشی"></p>';
-        submit_button('ساخت کاربر');
-        echo '</form><h2>فهرست</h2>';
-        echo '<table class="widefat striped"><thead><tr><th>نام کاربری</th><th>نام</th><th>ایمیل</th><th>تاریخ عضویت</th></tr></thead><tbody>';
-        foreach ($users as $u) echo '<tr><td>'.esc_html($u->user_login).'</td><td>'.esc_html($u->display_name).'</td><td>'.esc_html($u->user_email).'</td><td>'.esc_html($u->user_registered).'</td></tr>';
+        echo '<input type="hidden" name="bimarstop_create_user" value="1">';
+        echo '<p><label>شماره موبایل<br><input required name="user_mobile" type="tel" inputmode="tel" class="regular-text" maxlength="13" placeholder="09123456789"></label></p>';
+        echo '<p><label>نام و نام خانوادگی<br><input name="display_name" type="text" class="regular-text" placeholder="مثلاً علی رضایی"></label></p>';
+        submit_button('ساخت حساب');
+        echo '</form></div>';
+
+        echo '<h2 style="margin-top:28px">فهرست</h2>';
+        echo '<table class="widefat striped"><thead><tr><th>شماره موبایل</th><th>نام</th><th>نام کاربری داخلی</th><th>تاریخ عضویت</th></tr></thead><tbody>';
+        foreach ($users as $u) {
+            $mobile = (string) get_user_meta($u->ID, 'bimarstop_mobile', true);
+            echo '<tr><td>' . esc_html($mobile ?: '—') . '</td><td>' . esc_html($u->display_name) . '</td><td>' . esc_html($u->user_login) . '</td><td>' . esc_html($u->user_registered) . '</td></tr>';
+        }
         if (!$users) echo '<tr><td colspan="4">هنوز کاربری وجود ندارد.</td></tr>';
         echo '</tbody></table></div>';
     }
