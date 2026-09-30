@@ -972,15 +972,14 @@ final class Plugin {
     }
 
     public function operator_private_chats_page(): void {
-        if ($this->current_role() !== 'bimarstop_operator' && !current_user_can('manage_options')) return;
-        $partner = absint($_GET['user'] ?? 0);
-        if ($partner) { $this->render_private_chat($partner, 'bimarstop-doctor-chats'); return; }
-        $doctors = $this->users_by_role('bimarstop_doctor');
-        echo '<div class="wrap" dir="rtl"><h1>🩺 چت خصوصی با پزشکان</h1><table class="widefat striped"><thead><tr><th>پزشک</th><th>ایمیل</th><th>عملیات</th></tr></thead><tbody>';
-        foreach ($doctors as $u) echo '<tr><td>'.esc_html($u->display_name ?: $u->user_login).'</td><td>'.esc_html($u->user_email).'</td><td><a class="button button-primary" href="'.esc_url(admin_url('admin.php?page=bimarstop-doctor-chats&user='.(int)$u->ID)).'">شروع / ادامه چت</a></td></tr>';
-        if (!$doctors) echo '<tr><td colspan="3">پزشکی ثبت نشده است.</td></tr>';
-        echo '</tbody></table></div>';
+        if($this->current_role()!=='bimarstop_operator'&&!current_user_can('manage_options'))return;
+        $doctors=$this->users_by_role('bimarstop_doctor');$patients=$this->users_by_role('bimarstop_patient');
+        echo '<div class="wrap" dir="rtl"><h1>🩺 چت با پزشکان</h1><section style="background:#fff;padding:18px;border:1px solid #ddd;border-radius:12px;margin:16px 0"><h2>➕ ساخت چت مستقیم پزشک ↔ بیمار</h2><p>این گفتگو مستقیم بین پزشک و بیمار است و اپراتور فقط آن را ایجاد می‌کند.</p><select id="bimar-direct-doctor"><option value="">پزشک</option>';foreach($doctors as $u)echo '<option value="'.(int)$u->ID.'">'.esc_html($u->display_name?:$u->user_login).'</option>';echo '</select> <select id="bimar-direct-patient"><option value="">بیمار</option>';foreach($patients as $u)echo '<option value="'.(int)$u->ID.'">'.esc_html($u->display_name?:$u->user_login).'</option>';echo '</select> <button type="button" class="button button-primary" id="bimar-create-direct-thread">ساخت گفتگو</button><div id="bimar-direct-result" style="margin-top:10px"></div></section>';
+        echo '<section style="background:#fff;padding:18px;border:1px solid #ddd;border-radius:12px"><h2>💬 گفتگوی پزشک و اپراتور</h2><table class="widefat striped"><thead><tr><th>پزشک</th><th>عملیات</th></tr></thead><tbody>';foreach($doctors as $u)echo '<tr><td>'.esc_html($u->display_name?:$u->user_login).'</td><td><a class="button button-primary" href="'.esc_url(admin_url('admin.php?page=bimarstop-doctor-chats&user='.(int)$u->ID)).'">شروع / ادامه چت</a></td></tr>';if(!$doctors)echo '<tr><td colspan="2">پزشکی ثبت نشده است.</td></tr>';echo '</tbody></table></section>';
+        $nonce=wp_create_nonce('bimarstop_private_chat');$ajax=admin_url('admin-ajax.php');
+        echo '<script>(function(){var b=document.getElementById("bimar-create-direct-thread");if(!b)return;b.onclick=function(){var d=document.getElementById("bimar-direct-doctor").value,p=document.getElementById("bimar-direct-patient").value,o=document.getElementById("bimar-direct-result");if(!d||!p){o.textContent="پزشک و بیمار را انتخاب کنید.";return}var f=new FormData();f.append("action","bimarstop_create_direct_thread");f.append("nonce","'.esc_js($nonce).'");f.append("doctor_id",d);f.append("patient_id",p);fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(function(r){return r.json()}).then(function(x){o.textContent=x.success?"گفتگوی مستقیم ساخته شد.":"ساخت گفتگو ناموفق بود."}).catch(function(){o.textContent="خطا در ارتباط با سرور."})}})();</script></div>';
     }
+
 
     public function doctor_private_chats_page(): void {
         if ($this->current_role() !== 'bimarstop_doctor' && !current_user_can('manage_options')) return;
