@@ -557,14 +557,15 @@ final class Plugin {
             add_menu_page('بیمار استاپ', 'بیمار استاپ', 'read', 'bimarstop-chat', [$this, 'patient_chat_page'], 'dashicons-format-chat', 25);
             add_submenu_page('bimarstop-chat', 'چت با اپراتور', 'چت با اپراتور', 'read', 'bimarstop-chat', [$this, 'patient_chat_page']);
             add_submenu_page('bimarstop-chat', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
+            add_menu_page('مدارک', 'مدارک', 'read', 'bimarstop-patient-documents', [$this, 'personal_documents_page'], 'dashicons-portfolio', 26);
             return;
         }
 
         if ($role === 'bimarstop_doctor') {
-            add_menu_page('BimarStop', 'BimarStop', 'read', 'bimarstop', [$this, 'doctor_dashboard'], 'dashicons-heart', 25);
-            add_submenu_page('bimarstop', 'داشبورد', 'داشبورد', 'read', 'bimarstop', [$this, 'doctor_dashboard']);
-            add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
-            add_submenu_page('bimarstop', 'چت با اپراتورها', 'چت با اپراتورها', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page']);
+            add_menu_page('بیمار استاپ', 'بیمار استاپ', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page'], 'dashicons-format-chat', 25);
+            add_submenu_page('bimarstop-doctor-chats', 'چت با اپراتور', 'چت با اپراتور', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page']);
+            add_submenu_page('bimarstop-doctor-chats', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
+            add_submenu_page('bimarstop-doctor-chats', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'personal_documents_page']);
             return;
         }
 
@@ -575,7 +576,7 @@ final class Plugin {
             add_submenu_page('bimarstop', 'بیماران', 'بیماران', 'read', 'bimarstop-patients', [$this, 'patients_page']);
             add_submenu_page('bimarstop', 'پزشکان', 'پزشکان', 'read', 'bimarstop-doctors', [$this, 'doctors_page']);
             add_submenu_page('bimarstop', 'چت با بیمار', 'چت با بیمار', 'read', 'bimarstop-chat', [$this, 'operator_chat_page']);
-            add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'documents_page']);
+            add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'personal_documents_page']);
             add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
             add_submenu_page('bimarstop', 'چت با پزشکان', 'چت با پزشکان', 'read', 'bimarstop-doctor-chats', [$this, 'operator_private_chats_page']);
             return;
@@ -1943,6 +1944,10 @@ final class Plugin {
             </form>
         </div>
         <?php
+    }
+
+    public function personal_documents_page(): void {
+        \BimarStop\DocumentManager::instance()->render_page();
     }
 
     public function body_class(array $classes): array {
