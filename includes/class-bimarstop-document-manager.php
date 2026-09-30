@@ -202,8 +202,15 @@ final class DocumentManager {
         if($html==='')$html='<div class="bimar-doc-empty">بیماری پیدا نشد.</div>'; wp_send_json_success(['html'=>$html]);
     }
 
+    private function sync_legacy_library(): void {
+        global $wpdb;$uploads=wp_upload_dir();if(!empty($uploads['error'])||empty($uploads['basedir'])||!is_dir($uploads['basedir']))return;
+        $table=$wpdb->prefix.'bimarstop_documents';$cats=$wpdb->prefix.'bimarstop_document_categories';$cat=(int)$wpdb->get_var("SELECT id FROM {$cats} ORDER BY id ASC LIMIT 1");if(!$cat){$wpdb->insert($cats,['name'=>'عمومی','parent_id'=>0,'created_at'=>current_time('mysql')],['%s','%d','%s']);$cat=(int)$wpdb->insert_id;}
+        $allowed=['pdf','jpg','jpeg','png','webp','doc','docx'];$base=realpath($uploads['basedir']);try{$it=new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($uploads['basedir'],\FilesystemIterator::SKIP_DOTS));}catch(\Throwable $e){return;}
+        foreach($it as $file){if(!$file->isFile())continue;$path=realpath($file->getPathname());$ext=strtolower(pathinfo($path,PATHINFO_EXTENSION));if(!$path||!$base||strpos($path,$base)!==0||!in_array($ext,$allowed,true))continue;if(!$wpdb->get_var($wpdb->prepare("SELECT id FROM {$table} WHERE path=%s",$path)))$wpdb->insert($table,['category_id'=>$cat,'path'=>$path,'name'=>sanitize_file_name($file->getFilename()),'size'=>(int)$file->getSize(),'type'=>wp_check_filetype($file->getFilename())['type']?:'application/octet-stream','hidden'=>0,'created_at'=>current_time('mysql'),'updated_at'=>current_time('mysql')],['%d','%s','%s','%d','%s','%d','%s','%s']);}
+    }
+
     public function ajax_library(): void {
-        $this->check_nonce(); if($this->role()!=='bimarstop_operator')wp_send_json_error(['message'=>'فقط اپراتور.'],403); global $wpdb;
+        $this->check_nonce(); $this->sync_legacy_library(); if($this->role()!=='bimarstop_operator')wp_send_json_error(['message'=>'فقط اپراتور.'],403); global $wpdb;
         $q=sanitize_text_field(wp_unslash($_POST['q']??'')); $like='%'.$wpdb->esc_like($q).'%'; $dt=$wpdb->prefix.'bimarstop_personal_docs'; $legacy=$wpdb->prefix.'bimarstop_documents';
         $personal=$q!==''?$wpdb->get_results($wpdb->prepare("SELECT id,name,size FROM {$dt} WHERE name LIKE %s ORDER BY id DESC LIMIT 100",$like)):$wpdb->get_results("SELECT id,name,size FROM {$dt} ORDER BY id DESC LIMIT 100");
         $old=$q!==''?$wpdb->get_results($wpdb->prepare("SELECT id,name,size FROM {$legacy} WHERE name LIKE %s AND hidden=0 ORDER BY id DESC LIMIT 100",$like)):$wpdb->get_results("SELECT id,name,size FROM {$legacy} WHERE hidden=0 ORDER BY id DESC LIMIT 100");
