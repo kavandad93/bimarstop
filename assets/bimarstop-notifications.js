@@ -24,7 +24,9 @@ function poll(){
  }).catch(function(){});
 }
 if('serviceWorker' in navigator){
- navigator.serviceWorker.register(cfg.sw).catch(function(){});
+ var sw=cfg.sw+'?nonce='+encodeURIComponent(cfg.nonce);
+ navigator.serviceWorker.register(sw,{scope:'/wp-admin/'}).catch(function(){});
+ navigator.serviceWorker.addEventListener('message',function(e){if(e.data&&e.data.type==='bimarstop-notification-click'&&e.data.url)window.location.href=e.data.url;});
 }
 if('Notification' in window && Notification.permission==='default'){
  setTimeout(function(){Notification.requestPermission().catch(function(){});},2500);
