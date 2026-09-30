@@ -260,6 +260,7 @@ final class Plugin {
     public function bimarstop_login_url($login_url,$redirect='',$force_reauth=false): string { return home_url('/bimarstop-login/'); }
 
     public function show_admin_bar($show): bool {
+        if (is_user_logged_in() && in_array($this->current_role(), ['bimarstop_patient','bimarstop_doctor','bimarstop_operator'], true)) return false;
         return is_user_logged_in() ? (bool) $show : false;
     }
 
