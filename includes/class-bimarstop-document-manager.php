@@ -228,11 +228,14 @@ final class DocumentManager {
     }
 
     public function ajax_case(): void {
-        $this->check_nonce(); if($this->role()!=='bimarstop_operator')wp_send_json_error(['message'=>'فقط اپراتور می‌تواند کیس بسازد.']);
-        global $wpdb;$doctor=absint($_POST['doctor_id']??0);$patient=absint($_POST['patient_id']??0);
+        $this->check_nonce();if($this->role()!=='bimarstop_operator')wp_send_json_error(['message'=>'فقط اپراتور می‌تواند کیس مدیریت کند.']);global $wpdb;
+        $doctor=absint($_POST['doctor_id']??0);$patient=absint($_POST['patient_id']??0);$action=sanitize_key($_POST['case_action']??'connect');
         if(!$doctor||!$patient||!get_user_by('id',$doctor)||!get_user_by('id',$patient))wp_send_json_error(['message'=>'پزشک یا بیمار نامعتبر است.']);
-        $wpdb->replace($wpdb->prefix.'bimarstop_doctor_cases',['doctor_id'=>$doctor,'patient_id'=>$patient,'operator_id'=>get_current_user_id(),'status'=>'active','created_at'=>current_time('mysql'),'updated_at'=>current_time('mysql')],['%d','%d','%d','%s','%s','%s']);wp_send_json_success();
+        $table=$wpdb->prefix.'bimarstop_doctor_cases';
+        if($action==='disconnect'){$wpdb->delete($table,['doctor_id'=>$doctor,'patient_id'=>$patient],['%d','%d']);wp_send_json_success(['disconnected'=>true]);}
+        $wpdb->replace($table,['doctor_id'=>$doctor,'patient_id'=>$patient,'operator_id'=>get_current_user_id(),'status'=>'active','created_at'=>current_time('mysql'),'updated_at'=>current_time('mysql')],['%d','%d','%d','%s','%s','%s']);wp_send_json_success();
     }
+
 
     public function render_page(): void {
         if(!$this->allowed())return;
