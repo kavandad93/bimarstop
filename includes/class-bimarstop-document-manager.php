@@ -261,15 +261,14 @@ final class DocumentManager {
     }
 
     private function render_operator(): void {
-        $doctors=get_users(['role'=>'bimarstop_doctor','orderby'=>'display_name','order'=>'ASC']);$patients=get_users(['role'=>'bimarstop_patient','orderby'=>'display_name','order'=>'ASC']);
-        echo '<div class="bimar-docs-app" dir="rtl"><div class="bimar-docs-hero"><h1>📚 مدیریت مدارک</h1><p>مدارک بیماران و پزشکان را ساده و مرتب مدیریت کنید.</p></div>';
-        echo '<section class="bimar-docs-section"><h2>📄 مدارک</h2><p>مدارک عمومی قدیمی BimarStop از این بخش قابل دسترسی هستند.</p><a class="button button-primary" href="'.esc_url(admin_url('admin.php?page=bimarstop-documents&legacy=1')).'">باز کردن مدیریت مدارک عمومی</a></section>';
-        foreach($doctors as $u)$this->render_owner_section((int)$u->ID,'bimarstop_doctor','👨‍⚕️ مدارک دکتر '.($u->display_name?:$u->user_login),true);
-        echo '<section class="bimar-docs-section"><h2>👥 مدارک بیماران</h2>';
-        foreach($patients as $u){echo '<div class="bimar-doc-case"><strong>👤 '.esc_html($u->display_name?:$u->user_login).'</strong><a class="button" href="'.esc_url(admin_url('admin.php?page=bimarstop-patient-documents&patient='.(int)$u->ID)).'">باز کردن پوشه</a></div>';}
-        if(!$patients)echo '<div class="bimar-doc-empty">بیماری وجود ندارد.</div>';
-        echo '</section>';
-        echo '<section class="bimar-docs-section"><h2>🩺 کیس‌های پزشکان</h2><p>برای اینکه پزشک مدارک بیمار فعلی را ببیند، بیمار را به پزشک متصل کنید.</p><form class="bimar-docs-toolbar" onsubmit="event.preventDefault();BimarDocs.call(\'bimarstop_docs_case\',{doctor_id:this.doctor.value,patient_id:this.patient.value}).then(function(x){if(x.success)location.reload();else alert(x.data.message)});return false;"><select name="doctor" required><option value="">پزشک</option>';foreach($doctors as $u)echo '<option value="'.(int)$u->ID.'">'.esc_html($u->display_name?:$u->user_login).'</option>';echo '</select><select name="patient" required><option value="">بیمار</option>';foreach($patients as $u)echo '<option value="'.(int)$u->ID.'">'.esc_html($u->display_name?:$u->user_login).'</option>';echo '</select><button class="button button-primary">➕ ثبت کیس</button></form></section></div>';
+        $doctors=get_users(['role'=>'bimarstop_doctor','orderby'=>'display_name','order'=>'ASC']);
+        echo '<div class="bimar-docs-app" dir="rtl"><div class="bimar-docs-hero"><h1>📚 مدیریت مدارک</h1><p>کتابخانه مرکزی، پوشه پزشکان و مدارک بیماران را از یکجا مدیریت کنید.</p></div>';
+        echo '<style>.bimar-doc-compact{padding:9px!important;margin:8px 0!important;border-radius:12px!important;box-shadow:none!important}.bimar-doc-compact h2{font-size:15px!important;margin:0}.bimar-doc-library-card{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid #dbe3ee;border-radius:12px;background:#fff;cursor:grab}.bimar-doc-search{width:100%;max-width:560px;min-height:46px;padding:10px 13px;border:1px solid #cbd5e1;border-radius:12px}.bimar-doc-search-result{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px;border:1px solid #e2e8f0;border-radius:12px;margin-top:7px;background:#fff}</style>';
+        echo '<section class="bimar-docs-section"><h2>🗂️ کتابخانه مدارک</h2><p>فایل‌های قابل مدیریت سیستم را اینجا جستجو کنید و فایل‌های شخصی را با درگ‌اند‌دراپ به پوشه‌های داخلی منتقل کنید.</p><input class="bimar-doc-search" data-library-search placeholder="🔎 جستجوی فایل..."><div class="bimar-docs-grid" data-library-results style="margin-top:12px"></div></section>';
+        echo '<section class="bimar-docs-section"><h2>👨‍⚕️ مدارک دکترها</h2><p>پوشه هر دکتر کوچک و قابل مینیمایز است.</p></section>';
+        foreach($doctors as $u){echo '<div class="bimar-doc-compact">';$this->render_owner_section((int)$u->ID,'bimarstop_doctor','👨‍⚕️ '.($u->display_name?:$u->user_login),true);echo '</div>';}
+        echo '<section class="bimar-docs-section"><h2>👥 مدارک بیماران</h2><p>برای تعداد زیاد بیماران، لیست کامل نمایش داده نمی‌شود؛ با جستجو بیمار را پیدا کنید.</p><input class="bimar-doc-search" data-patient-search placeholder="🔎 نام، نام خانوادگی یا شماره موبایل..."><div data-patient-search-results></div></section>';
+        echo '<section class="bimar-docs-section"><h2>🩺 کیس‌های پزشکان</h2><p>اتصال و قطع اتصال پزشک و بیمار از همین بخش انجام می‌شود.</p><div class="bimar-doc-case"><span>برای مدیریت یک کیس، پزشک و بیمار را انتخاب کنید.</span></div></section></div>';
     }
 
     public function patient_folder_page(): void {
