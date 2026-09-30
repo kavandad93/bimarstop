@@ -13,6 +13,7 @@ final class DocumentManager {
         add_action('wp_ajax_bimarstop_docs_move', [$this, 'ajax_move']);
         add_action('wp_ajax_bimarstop_docs_rename', [$this, 'ajax_rename']);
         add_action('wp_ajax_bimarstop_docs_delete', [$this, 'ajax_delete']);
+        add_action('wp_ajax_bimarstop_docs_download', [$this, 'ajax_download']);
         add_action('wp_ajax_bimarstop_docs_case', [$this, 'ajax_case']);
         add_action('wp_ajax_bimarstop_docs_collapse', [$this, 'ajax_noop']);
     }
@@ -166,6 +167,21 @@ final class DocumentManager {
         $wpdb->update($wpdb->prefix.'bimarstop_personal_docs',['name'=>$name,'updated_at'=>current_time('mysql')],['id'=>$id],['%s','%s'],['%d']);wp_send_json_success();
     }
 
+    public function ajax_download(): void {
+        if(!$this->allowed() || !wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['nonce']??'')),'bimarstop_personal_download')) wp_die('دسترسی غیرمجاز',403);
+        global $wpdb; $id=absint($_GET['document_id']??0);
+        $d=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_personal_docs WHERE id=%d",$id));
+        if(!$d || !is_file($d->path)) wp_die('فایل پیدا نشد',404);
+        $r=$this->role(); $uid=get_current_user_id(); $ok=false;
+        if($r==='bimarstop_operator') $ok=in_array($d->owner_role,['bimarstop_patient','bimarstop_doctor'],true);
+        elseif($r===$d->owner_role && (int)$d->owner_user_id===$uid) $ok=true;
+        elseif($r==='bimarstop_doctor' && $d->owner_role==='bimarstop_patient'){
+            $ok=(bool)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}bimarstop_doctor_cases WHERE doctor_id=%d AND patient_id=%d AND status='active'",$uid,(int)$d->owner_user_id));
+        }
+        if(!$ok) wp_die('دسترسی غیرمجاز',403);
+        nocache_headers(); header('Content-Type: '.sanitize_text_field($d->type)); header('Content-Length: '.filesize($d->path)); header('Content-Disposition: attachment; filename="'.str_replace('"','',wp_basename($d->name)).'"'); readfile($d->path); exit;
+    }
+
     public function ajax_delete(): void {
         $this->check_nonce(); global $wpdb;$id=absint($_POST['doc_id']??0);$d=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_personal_docs WHERE id=%d",$id));
         if(!$d||!$this->can_edit_owner((int)$d->owner_user_id,$d->owner_role))wp_send_json_error(['message'=>'حذف مجاز نیست.']);
@@ -191,7 +207,7 @@ final class DocumentManager {
 
     private function render_folder(int $folder,array $docs,array $children,bool $editable): void {
         $f=$children[$folder]??[];$mydocs=[];foreach($docs as $d)if((int)$d->folder_id===$folder)$mydocs[]=$d;
-        foreach($f as $x){$id=(int)$x->id;echo '<section class="bimar-doc-folder" data-drop-folder="'.$id.'"><div class="bimar-doc-folder-head"><strong class="bimar-doc-folder-title">📁 '.esc_html($x->name).'</strong><button class="bimar-doc-collapse" type="button" data-collapse-folder="'.$id.'" aria-label="جمع کردن پوشه">⌃</button></div><div class="bimar-doc-content" data-folder-body="'.$id.'"><div class="bimar-doc-folder-sub">پوشه قابل جابه‌جایی و مرتب‌سازی</div>';if($editable)echo '<label class="button" style="display:inline-flex;align-items:center;gap:6px;margin:8px 0;cursor:pointer">📤 افزودن فایل<input data-doc-upload data-folder="'.$id.'" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden></label>';foreach($mydocs as $d)echo '<div class="bimar-doc-file" draggable="'.($editable?'true':'false').'" data-drag-doc="'.(int)$d->id.'"><b>📎 '.esc_html($d->name).'</b><div class="bimar-doc-meta">'.size_format((int)$d->size).'</div><div class="bimar-doc-actions"><a class="button" target="_blank" href="'.esc_url(admin_url('admin-ajax.php?action=bimarstop_download_file&document_id='.(int)$d->id.'&personal=1&nonce='.wp_create_nonce('bimarstop_personal_download'))).'">دانلود</a>'.($editable?'<button type="button" class="button" data-doc-id="'.(int)$d->id.'" data-doc-rename="'.esc_attr(pathinfo($d->name,PATHINFO_FILENAME)).'">تغییر نام</button><button type="button" class="button" data-doc-delete="'.(int)$d->id.'">حذف</button>':'').'</div></div>';if(empty($mydocs)&&empty($children[$id]))echo '<div class="bimar-doc-empty">این پوشه خالی است.</div>'; $this->render_folder($id,$docs,$children,$editable);echo '</div></section>'; }
+        foreach($f as $x){$id=(int)$x->id;echo '<section class="bimar-doc-folder" data-drop-folder="'.$id.'"><div class="bimar-doc-folder-head"><strong class="bimar-doc-folder-title">📁 '.esc_html($x->name).'</strong><button class="bimar-doc-collapse" type="button" data-collapse-folder="'.$id.'" aria-label="جمع کردن پوشه">⌃</button></div><div class="bimar-doc-content" data-folder-body="'.$id.'"><div class="bimar-doc-folder-sub">پوشه قابل جابه‌جایی و مرتب‌سازی</div>';if($editable)echo '<label class="button" style="display:inline-flex;align-items:center;gap:6px;margin:8px 0;cursor:pointer">📤 افزودن فایل<input data-doc-upload data-folder="'.$id.'" type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden></label>';foreach($mydocs as $d)echo '<div class="bimar-doc-file" draggable="'.($editable?'true':'false').'" data-drag-doc="'.(int)$d->id.'"><b>📎 '.esc_html($d->name).'</b><div class="bimar-doc-meta">'.size_format((int)$d->size).'</div><div class="bimar-doc-actions"><a class="button" target="_blank" href="'.esc_url(admin_url('admin-ajax.php?action=bimarstop_docs_download&document_id='.(int)$d->id.'&nonce='.wp_create_nonce('bimarstop_personal_download'))).'">دانلود</a>'.($editable?'<button type="button" class="button" data-doc-id="'.(int)$d->id.'" data-doc-rename="'.esc_attr(pathinfo($d->name,PATHINFO_FILENAME)).'">تغییر نام</button><button type="button" class="button" data-doc-delete="'.(int)$d->id.'">حذف</button>':'').'</div></div>';if(empty($mydocs)&&empty($children[$id]))echo '<div class="bimar-doc-empty">این پوشه خالی است.</div>'; $this->render_folder($id,$docs,$children,$editable);echo '</div></section>'; }
     }
 
     private function render_owner_section(int $owner,string $role,string $title,bool $editable): void {
