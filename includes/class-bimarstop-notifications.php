@@ -12,6 +12,7 @@ final class Notifications {
         add_action('wp_ajax_bimarstop_get_notifications', [$this,'ajax_get_notifications']);
         add_action('wp_ajax_bimarstop_private_get_messages', [$this,'mark_private_read'], 1);
         add_action('wp_ajax_bimarstop_get_messages', [$this,'mark_chat_read'], 1);
+        add_action('wp_ajax_bimarstop_service_worker', [$this,'service_worker']);
     }
     public function manifest_link(): void {
         echo '<link rel="manifest" href="'.esc_url(BIMARSTOP_URL.'bimarstop-manifest.json').'">';
@@ -23,7 +24,7 @@ final class Notifications {
         wp_localize_script('bimarstop-notifications','BimarStopNotifications',[
             'ajax'=>admin_url('admin-ajax.php'),
             'nonce'=>wp_create_nonce('bimarstop_notifications'),
-            'sw'=>BIMARSTOP_URL.'bimarstop-sw.js',
+            'sw'=>admin_url('admin-ajax.php?action=bimarstop_service_worker&nonce='.wp_create_nonce('bimarstop_service_worker')),
             'interval'=>5000,
         ]);
     }
@@ -57,5 +58,14 @@ final class Notifications {
         }
         usort($items,static fn($a,$b)=>strcmp((string)$b['created'],(string)$a['created']));
         wp_send_json_success(['notifications'=>array_slice($items,0,20),'count'=>count($items)]);
+    }
+    public function service_worker(): void {
+        if(!is_user_logged_in()){status_header(403);header('Content-Type: application/javascript; charset=utf-8');exit;}
+        if(!wp_verify_nonce(sanitize_text_field(wp_unslash($_GET['nonce']??'')),'bimarstop_service_worker')){status_header(403);header('Content-Type: application/javascript; charset=utf-8');exit;}
+        nocache_headers(); header('Content-Type: application/javascript; charset=utf-8');
+        $nonce=wp_create_nonce('bimarstop_notifications');
+        echo 'const BimarStopNonce='.wp_json_encode($nonce).';';
+        echo "const P=5000;async function poll(){try{const u=new URL('/wp-admin/admin-ajax.php',self.location.origin);u.searchParams.set('action','bimarstop_get_notifications');u.searchParams.set('nonce',BimarStopNonce);const r=await fetch(u,{credentials:'include',cache:'no-store'}),j=await r.json();if(!j.success)return;const c=await caches.open('bimarstop-notifications-v1'),m=await c.match('/last');const last=m?parseInt(await m.text(),10)||0:0;let max=last;for(const n of (j.data.notifications||[]).slice().reverse()){const id=parseInt(String(n.id).replace(/\\D/g,''),10)||0;if(id<=last)continue;await self.registration.showNotification(n.title||'بیمار استاپ',{body:n.body||'پیام جدید دارید.',icon:'/wp-content/plugins/bimarstop/assets/icon-192.png',badge:'/wp-content/plugins/bimarstop/assets/icon-192.png',tag:'bimarstop-'+n.id,dir:'rtl',lang:'fa',data:{url:n.url||'/wp-admin/'}});if(id>max)max=id;}if(max>last)await c.put('/last',new Response(String(max)));}catch(e){}}self.addEventListener('install',e=>e.waitUntil(self.skipWaiting()));self.addEventListener('activate',e=>e.waitUntil(self.clients.claim().then(poll)));setInterval(poll,P);self.addEventListener('notificationclick',e=>{e.notification.close();const u=(e.notification.data&&e.notification.data.url)||'/wp-admin/';e.waitUntil(clients.openWindow?clients.openWindow(u):Promise.resolve());});poll();";
+        exit;
     }
 }
