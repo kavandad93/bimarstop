@@ -977,7 +977,7 @@ final class Plugin {
         if($this->current_role()!=='bimarstop_doctor')return;global $wpdb;$uid=get_current_user_id();
         $rows=$wpdb->get_results($wpdb->prepare("SELECT t.*,u.display_name AS patient_name FROM {$wpdb->prefix}bimarstop_private_threads t JOIN {$wpdb->users} u ON u.ID=IF(t.user_a_id=%d,t.user_b_id,t.user_a_id) WHERE (t.user_a_id=%d OR t.user_b_id=%d) AND u.ID<>%d ORDER BY t.updated_at DESC",$uid,$uid,$uid,$uid));
         echo '<div class="wrap" dir="rtl"><h1>👤 چت مستقیم با بیماران</h1><table class="widefat striped"><thead><tr><th>بیمار</th><th>عملیات</th></tr></thead><tbody>';
-        foreach($rows as $r)echo '<tr><td>'.esc_html($r->patient_name).'</td><td><a class="button button-primary" href="'.esc_url(admin_url('admin.php?page=bimarstop-doctor-direct-chats&user='.(int)($r->user_a_id==$uid?$r->user_b_id:$r->user_a_id))).'">باز کردن گفتگو</a></td></tr>';
+        foreach($rows as $r){$pid=(int)$r->user_a_id===$uid?(int)$r->user_b_id:(int)$r->user_a_id;$pu=get_userdata($pid);if(!$pu||!in_array('bimarstop_patient',(array)$pu->roles,true))continue;echo '<tr><td>'.esc_html($pu->display_name?:$pu->user_login).'</td><td><a class="button button-primary" href="'.esc_url(admin_url('admin.php?page=bimarstop-doctor-direct-chats&user='.$pid)).'">باز کردن گفتگو</a></td></tr>';}
         if(!$rows)echo '<tr><td colspan="2">هنوز گفتگوی مستقیمی برای شما ساخته نشده است.</td></tr>';echo '</tbody></table></div>';
     }
 
