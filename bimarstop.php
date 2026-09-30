@@ -2,23 +2,25 @@
 /**
  * Plugin Name: BimarStop
  * Description: BimarStop theme system and WordPress page rendering foundation.
- * Version: 0.7.5
+ * Version: 0.7.6
  * Author: BimarStop
  * License: Proprietary
  */
 
 if (!defined('ABSPATH')) exit;
 
-define('BIMARSTOP_VERSION', '0.7.5');
+define('BIMARSTOP_VERSION', '0.7.6');
 define('BIMARSTOP_FILE', __FILE__);
 define('BIMARSTOP_DIR', plugin_dir_path(__FILE__));
 define('BIMARSTOP_URL', plugin_dir_url(__FILE__));
 
 require_once BIMARSTOP_DIR . 'includes/class-bimarstop.php';
+require_once BIMARSTOP_DIR . 'includes/class-bimarstop-document-manager.php';
 require_once BIMARSTOP_DIR . 'includes/class-bimarstop-notifications.php';
 
 function bimarstop_bootstrap() {
     \BimarStop\Plugin::instance();
+    \BimarStop\DocumentManager::instance();
     \BimarStop\Notifications::instance();
 }
 add_action('plugins_loaded', 'bimarstop_bootstrap');
