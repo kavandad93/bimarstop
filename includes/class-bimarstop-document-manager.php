@@ -17,6 +17,8 @@ final class DocumentManager {
         add_action('wp_ajax_bimarstop_docs_delete', [$this, 'ajax_delete']);
         add_action('wp_ajax_bimarstop_docs_download', [$this, 'ajax_download']);
         add_action('wp_ajax_bimarstop_docs_case', [$this, 'ajax_case']);
+        add_action('wp_ajax_bimarstop_docs_search_patients', [$this, 'ajax_search_patients']);
+        add_action('wp_ajax_bimarstop_docs_library', [$this, 'ajax_library']);
         add_action('wp_ajax_bimarstop_docs_collapse', [$this, 'ajax_noop']);
     }
 
@@ -188,6 +190,24 @@ final class DocumentManager {
         $this->check_nonce(); global $wpdb;$id=absint($_POST['doc_id']??0);$d=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_personal_docs WHERE id=%d",$id));
         if(!$d||!$this->can_edit_owner((int)$d->owner_user_id,$d->owner_role))wp_send_json_error(['message'=>'حذف مجاز نیست.']);
         if(is_file($d->path))@unlink($d->path);$wpdb->delete($wpdb->prefix.'bimarstop_personal_docs',['id'=>$id],['%d']);wp_send_json_success();
+    }
+
+    public function ajax_search_patients(): void {
+        $this->check_nonce(); if($this->role()!=='bimarstop_operator')wp_send_json_error(['message'=>'فقط اپراتور.'],403);
+        $q=sanitize_text_field(wp_unslash($_POST['q']??'')); if(mb_strlen($q)<2)wp_send_json_success(['html'=>'']);
+        $users=get_users(['role'=>'bimarstop_patient','search'=>'*'.esc_attr($q).'*','search_columns'=>['user_login','display_name','user_email'],'number'=>20,'orderby'=>'display_name','order'=>'ASC']);
+        $html=''; foreach($users as $u){$label=$u->display_name?:$u->user_login;$html.='<div class="bimar-doc-search-result"><strong>👤 '.esc_html($label).'</strong><a class="button button-primary" href="'.esc_url(admin_url('admin.php?page=bimarstop-patient-documents&patient='.(int)$u->ID)).'">باز کردن مدارک</a></div>';}
+        if($html==='')$html='<div class="bimar-doc-empty">بیماری پیدا نشد.</div>'; wp_send_json_success(['html'=>$html]);
+    }
+
+    public function ajax_library(): void {
+        $this->check_nonce(); if($this->role()!=='bimarstop_operator')wp_send_json_error(['message'=>'فقط اپراتور.'],403); global $wpdb;
+        $q=sanitize_text_field(wp_unslash($_POST['q']??'')); $like='%'.$wpdb->esc_like($q).'%'; $dt=$wpdb->prefix.'bimarstop_personal_docs'; $legacy=$wpdb->prefix.'bimarstop_documents';
+        $personal=$q!==''?$wpdb->get_results($wpdb->prepare("SELECT id,name,size FROM {$dt} WHERE name LIKE %s ORDER BY id DESC LIMIT 100",$like)):$wpdb->get_results("SELECT id,name,size FROM {$dt} ORDER BY id DESC LIMIT 100");
+        $old=$q!==''?$wpdb->get_results($wpdb->prepare("SELECT id,name,size FROM {$legacy} WHERE name LIKE %s AND hidden=0 ORDER BY id DESC LIMIT 100",$like)):$wpdb->get_results("SELECT id,name,size FROM {$legacy} WHERE hidden=0 ORDER BY id DESC LIMIT 100");
+        $html=''; foreach($personal as $d)$html.='<div class="bimar-doc-library-card" draggable="true" data-drag-doc="p'.(int)$d->id.'">📎 <strong>'.esc_html($d->name).'</strong> <small>'.esc_html(size_format((int)$d->size)).'</small></div>';
+        foreach($old as $d)$html.='<div class="bimar-doc-library-card">📎 <strong>'.esc_html($d->name).'</strong> <small>'.esc_html(size_format((int)$d->size)).'</small> <small>قدیمی</small></div>';
+        if($html==='')$html='<div class="bimar-doc-empty">فایلی پیدا نشد.</div>'; wp_send_json_success(['html'=>$html]);
     }
 
     public function ajax_case(): void {
