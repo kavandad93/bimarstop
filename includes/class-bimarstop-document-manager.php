@@ -197,7 +197,7 @@ final class DocumentManager {
     public function ajax_search_patients(): void {
         $this->check_nonce(); if($this->role()!=='bimarstop_operator')wp_send_json_error(['message'=>'فقط اپراتور.'],403);
         $q=sanitize_text_field(wp_unslash($_POST['q']??'')); if(mb_strlen($q)<2)wp_send_json_success(['html'=>'']);
-        $users=get_users(['role'=>'bimarstop_patient','search'=>'*'.esc_attr($q).'*','search_columns'=>['user_login','display_name','user_email'],'number'=>20,'orderby'=>'display_name','order'=>'ASC']);
+        $users=preg_match('/^[0-9۰-۹٠-٩]+$/u',$q)?get_users(['role'=>'bimarstop_patient','meta_key'=>'bimarstop_mobile','meta_value'=>$q,'number'=>20,'orderby'=>'display_name','order'=>'ASC']):get_users(['role'=>'bimarstop_patient','search'=>'*'.esc_attr($q).'*','search_columns'=>['user_login','display_name','user_email'],'number'=>20,'orderby'=>'display_name','order'=>'ASC']);
         $html=''; foreach($users as $u){$label=$u->display_name?:$u->user_login;$html.='<div class="bimar-doc-search-result"><strong>👤 '.esc_html($label).'</strong><span><a class="button" href="'.esc_url(admin_url('admin.php?page=bimarstop-patient-documents&patient='.(int)$u->ID)).'">مدارک</a> <button type="button" class="button button-primary" data-case-connect="'.(int)$u->ID.'">اتصال</button></span></div>';}
         if($html==='')$html='<div class="bimar-doc-empty">بیماری پیدا نشد.</div>'; wp_send_json_success(['html'=>$html]);
     }
