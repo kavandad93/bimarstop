@@ -1947,7 +1947,9 @@ final class Plugin {
     }
 
     public function personal_documents_page(): void {
-        \BimarStop\DocumentManager::instance()->render_page();
+        $dm=\BimarStop\DocumentManager::instance();
+        if(isset($_GET['patient']) && absint($_GET['patient'])) $dm->patient_folder_page();
+        else $dm->render_page();
     }
 
     public function body_class(array $classes): array {
