@@ -567,6 +567,7 @@ final class Plugin {
             add_submenu_page('bimarstop-doctor-chats', 'چت با اپراتور', 'چت با اپراتور', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page']);
             add_submenu_page('bimarstop-doctor-chats', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
             add_submenu_page('bimarstop-doctor-chats', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'personal_documents_page']);
+            add_submenu_page('bimarstop-doctor-chats', '', '', 'read', 'bimarstop-patient-documents', [$this, 'personal_documents_page']);
             return;
         }
 
@@ -580,6 +581,7 @@ final class Plugin {
             add_submenu_page('bimarstop', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'personal_documents_page']);
             add_submenu_page('bimarstop', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
             add_submenu_page('bimarstop', 'چت با پزشکان', 'چت با پزشکان', 'read', 'bimarstop-doctor-chats', [$this, 'operator_private_chats_page']);
+            add_submenu_page('bimarstop', '', '', 'read', 'bimarstop-patient-documents', [$this, 'personal_documents_page']);
             return;
         }
 
