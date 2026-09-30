@@ -20,7 +20,7 @@ require_once BIMARSTOP_DIR . 'includes/class-bimarstop-notifications.php';
 
 function bimarstop_bootstrap() {
     \BimarStop\Plugin::instance();
-    new \BimarStop\DocumentManager();
+    \BimarStop\DocumentManager::instance();
     \BimarStop\Notifications::instance();
 }
 add_action('plugins_loaded', 'bimarstop_bootstrap');
