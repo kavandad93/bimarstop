@@ -269,10 +269,13 @@ final class Plugin {
     }
 
     public function redirect_patient_dashboard(): void {
-        if (!is_user_logged_in() || $this->current_role() !== 'bimarstop_patient') return;
+        if (!is_user_logged_in()) return;
+        $role=$this->current_role();
+        if (!in_array($role, ['bimarstop_patient','bimarstop_doctor'], true)) return;
         global $pagenow;
         if ($pagenow === 'index.php') {
-            wp_safe_redirect(admin_url('admin.php?page=bimarstop-chat'));
+            $target=$role==='bimarstop_doctor'?'bimarstop-doctor-chats':'bimarstop-chat';
+            wp_safe_redirect(admin_url('admin.php?page='.$target));
             exit;
         }
     }
@@ -281,7 +284,7 @@ final class Plugin {
         if (!is_user_logged_in() || current_user_can('manage_options')) return;
         $role = $this->current_role();
         if ($role === 'bimarstop_patient' || $role === 'bimarstop_doctor' || $role === 'bimarstop_operator') {
-            if ($role === 'bimarstop_patient') {
+            if (in_array($role, ['bimarstop_patient','bimarstop_doctor'], true)) {
                 remove_menu_page('index.php');
             }
             $menus = [
