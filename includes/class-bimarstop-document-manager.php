@@ -218,7 +218,7 @@ final class DocumentManager {
         $docs=$wpdb->get_results($wpdb->prepare("SELECT * FROM {$dt} WHERE owner_user_id=%d AND owner_role=%s ORDER BY name",$owner,$role));
         $children=[];foreach($folders as $f)$children[(int)$f->parent_id][]=$f;
         echo '<section class="bimar-docs-section"><h2>'.esc_html($title).'</h2>';
-        if($editable)echo '<div class="bimar-docs-toolbar"><form onsubmit="event.preventDefault();BimarDocs.call(\'bimarstop_docs_folder\',{name:this.name.value,parent_id:'.(int)$root.',owner_id:'.(int)$owner.',owner_role:'.esc_js($role).'}).then(function(x){if(x.success)location.reload();else alert(x.data.message)});return false;"><input name="name" required placeholder="نام پوشه جدید"><button class="button button-primary">➕ ساخت پوشه</button></form></div>';
+        if($editable)echo '<div class="bimar-docs-toolbar"><form onsubmit="event.preventDefault();BimarDocs.call(\'bimarstop_docs_folder\',{name:this.name.value,parent_id:'.(int)$root.',owner_id:'.(int)$owner.',owner_role:"'.esc_js($role).'".'}).then(function(x){if(x.success)location.reload();else alert(x.data.message)});return false;"><input name="name" required placeholder="نام پوشه جدید"><button class="button button-primary">➕ ساخت پوشه</button></form></div>';
         echo '<div class="bimar-docs-grid">';$this->render_folder(0,$docs,$children,$editable);echo '</div></section>';
     }
 
