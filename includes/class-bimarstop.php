@@ -559,6 +559,7 @@ final class Plugin {
             add_menu_page('بیمار استاپ', 'بیمار استاپ', 'read', 'bimarstop-chat', [$this, 'patient_chat_page'], 'dashicons-format-chat', 25);
             add_submenu_page('bimarstop-chat', 'چت با اپراتور', 'چت با اپراتور', 'read', 'bimarstop-chat', [$this, 'patient_chat_page']);
             add_submenu_page('bimarstop-chat', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
+            add_submenu_page('bimarstop-chat', 'چت مستقیم با پزشک', 'چت مستقیم با پزشک', 'read', 'bimarstop-patient-direct-chats', [$this, 'patient_direct_chats_page']);
             add_menu_page('مدارک', 'مدارک', 'read', 'bimarstop-patient-documents', [$this, 'personal_documents_page'], 'dashicons-portfolio', 26);
             return;
         }
@@ -567,6 +568,7 @@ final class Plugin {
             add_menu_page('بیمار استاپ', 'بیمار استاپ', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page'], 'dashicons-format-chat', 25);
             add_submenu_page('bimarstop-doctor-chats', 'چت با اپراتور', 'چت با اپراتور', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page']);
             add_submenu_page('bimarstop-doctor-chats', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
+            add_submenu_page('bimarstop-doctor-chats', 'چت مستقیم با بیماران', 'چت مستقیم با بیماران', 'read', 'bimarstop-doctor-direct-chats', [$this, 'doctor_direct_chats_page']);
             add_submenu_page('bimarstop-doctor-chats', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'personal_documents_page']);
             add_submenu_page('bimarstop-doctor-chats', '', '', 'read', 'bimarstop-patient-documents', [$this, 'personal_documents_page']);
             return;
@@ -969,6 +971,24 @@ final class Plugin {
         function sendMsg(){var v=input.value.trim();var chosen=file.files[0]||null;if(!v&&!chosen)return;var f=new FormData();f.append("action","bimarstop_private_send_message");f.append("nonce","'.esc_js($nonce).'");f.append("thread_id","'.(int)$thread->id.'");f.append("message",v);if(chosen)f.append("chat_file",chosen);if(docSelect&&docSelect.value)f.append("document_id",docSelect.value);send.disabled=true;input.value="";file.value="";att.classList.remove("show");fn.textContent="";rm.style.display="none";fetch("'.esc_url($ajax).'",{method:"POST",body:f,keepalive:true}).then(function(r){return r.json();}).then(function(x){send.disabled=false;if(x.success){load();}else{alert((x.data&&x.data.message)?x.data.message:"ارسال ناموفق بود.");}}).catch(function(){send.disabled=false;alert("ارتباط با سرور برقرار نشد.");});}send.onclick=function(e){e.preventDefault();sendMsg();};
         input.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMsg();}});
         load();setInterval(load,4000);})();</script>';
+    }
+
+    public function doctor_direct_chats_page(): void {
+        if($this->current_role()!=='bimarstop_doctor')return;global $wpdb;$uid=get_current_user_id();
+        $rows=$wpdb->get_results($wpdb->prepare("SELECT t.*,u.display_name AS patient_name FROM {$wpdb->prefix}bimarstop_private_threads t JOIN {$wpdb->users} u ON u.ID=IF(t.user_a_id=%d,t.user_b_id,t.user_a_id) WHERE (t.user_a_id=%d OR t.user_b_id=%d) AND u.ID<>%d ORDER BY t.updated_at DESC",$uid,$uid,$uid,$uid));
+        echo '<div class="wrap" dir="rtl"><h1>👤 چت مستقیم با بیماران</h1><table class="widefat striped"><thead><tr><th>بیمار</th><th>عملیات</th></tr></thead><tbody>';
+        foreach($rows as $r)echo '<tr><td>'.esc_html($r->patient_name).'</td><td><a class="button button-primary" href="'.esc_url(admin_url('admin.php?page=bimarstop-doctor-direct-chats&user='.(int)($r->user_a_id==$uid?$r->user_b_id:$r->user_a_id))).'">باز کردن گفتگو</a></td></tr>';
+        if(!$rows)echo '<tr><td colspan="2">هنوز گفتگوی مستقیمی برای شما ساخته نشده است.</td></tr>';echo '</tbody></table></div>';
+    }
+
+    public function patient_direct_chats_page(): void {
+        if($this->current_role()!=='bimarstop_patient')return;global $wpdb;$uid=get_current_user_id();
+        $partner=absint($_GET['user']??0);
+        if($partner){$this->render_private_chat($partner,'bimarstop-patient-direct-chats');return;}
+        $rows=$wpdb->get_results($wpdb->prepare("SELECT t.*,u.display_name AS doctor_name FROM {$wpdb->prefix}bimarstop_private_threads t JOIN {$wpdb->users} u ON u.ID=IF(t.user_a_id=%d,t.user_b_id,t.user_a_id) WHERE (t.user_a_id=%d OR t.user_b_id=%d) ORDER BY t.updated_at DESC",$uid,$uid,$uid));
+        echo '<div class="wrap" dir="rtl"><h1>🩺 چت مستقیم با پزشک</h1><table class="widefat striped"><thead><tr><th>پزشک</th><th>عملیات</th></tr></thead><tbody>';
+        foreach($rows as $r){$doctor=(int)$r->user_a_id===$uid?(int)$r->user_b_id:(int)$r->user_a_id;$u=get_userdata($doctor);if(!$u||!in_array('bimarstop_doctor',(array)$u->roles,true))continue;echo '<tr><td>'.esc_html($u->display_name?:$u->user_login).'</td><td><a class="button button-primary" href="'.esc_url(admin_url('admin.php?page=bimarstop-patient-direct-chats&user='.$doctor)).'">باز کردن گفتگو</a></td></tr>';}
+        echo '</tbody></table></div>';
     }
 
     public function operator_private_chats_page(): void {
