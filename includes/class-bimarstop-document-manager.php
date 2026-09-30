@@ -4,6 +4,8 @@ namespace BimarStop;
 if (!defined('ABSPATH')) exit;
 
 final class DocumentManager {
+    private static $instance = null;
+    public static function instance(): self { if (self::$instance === null) self::$instance = new self(); return self::$instance; }
     public function __construct() {
         add_action('admin_init', [$this, 'ensure_tables']);
         add_action('admin_enqueue_scripts', [$this, 'assets']);
