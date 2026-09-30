@@ -157,8 +157,8 @@ final class DocumentManager {
     public function ajax_move(): void {
         $this->check_nonce(); global $wpdb; $id=absint($_POST['doc_id']??0);$folder=absint($_POST['folder_id']??0);
         $d=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_personal_docs WHERE id=%d",$id));$f=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_personal_doc_folders WHERE id=%d",$folder));
-        if(!$d||!$f||$d->owner_user_id!=$f->owner_user_id||$d->owner_role!==$f->owner_role||!$this->can_edit_owner((int)$d->owner_user_id,$d->owner_role))wp_send_json_error(['message'=>'جابه‌جایی مجاز نیست.']);
-        $wpdb->update($wpdb->prefix.'bimarstop_personal_docs',['folder_id'=>$folder,'updated_at'=>current_time('mysql')],['id'=>$id],['%d','%s'],['%d']);wp_send_json_success();
+        if(!$d||!$f||($this->role()!=='bimarstop_operator'&&($d->owner_user_id!=$f->owner_user_id||$d->owner_role!==$f->owner_role||!$this->can_edit_owner((int)$d->owner_user_id,$d->owner_role)))||($this->role()==='bimarstop_operator'&&!$this->can_edit_owner((int)$f->owner_user_id,$f->owner_role)))wp_send_json_error(['message'=>'جابه‌جایی مجاز نیست.']);
+        $wpdb->update($wpdb->prefix.'bimarstop_personal_docs',['owner_user_id'=>(int)$f->owner_user_id,'owner_role'=>$f->owner_role,'folder_id'=>$folder,'updated_at'=>current_time('mysql')],['id'=>$id],['%d','%s','%d','%s'],['%d']);wp_send_json_success();
     }
 
     public function ajax_rename(): void {
