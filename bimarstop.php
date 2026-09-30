@@ -18,8 +18,8 @@ require_once BIMARSTOP_DIR . 'includes/class-bimarstop.php';
 require_once BIMARSTOP_DIR . 'includes/class-bimarstop-notifications.php';
 
 function bimarstop_bootstrap() {
-    BimarStop\\Plugin::instance();
-    BimarStop\\Notifications::instance();
+    \BimarStop\Plugin::instance();
+    \BimarStop\Notifications::instance();
 }
 add_action('plugins_loaded', 'bimarstop_bootstrap');
 
