@@ -233,8 +233,6 @@ CSS;
             if ($role === 'bimarstop_operator' && $owner !== get_current_user_id()) {
                 wp_send_json_error(['message' => 'اپراتور فقط می‌تواند پوشه‌های خودش را مدیریت کند.']);
             }
-                wp_send_json_error(['message' => 'مالک پوشه نامعتبر است.']);
-            }
         }
 
         if (!$this->can_edit_owner($owner, $role)) wp_send_json_error(['message' => 'ساخت پوشه مجاز نیست.']);
