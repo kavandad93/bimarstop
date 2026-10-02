@@ -20,6 +20,7 @@ final class Plugin {
         add_action('wp_dashboard_setup', [$this, 'dashboard_setup'], 100);
         add_action('admin_enqueue_scripts', [$this, 'admin_assets']);
         add_action('init', [$this, 'register_roles']);
+        add_filter('wp_mail', [$this, 'forward_bimarstop_email_to_sms'], 10, 1);
         add_shortcode('bimarstop_register', [$this, 'auth_shortcode']);
         add_shortcode('bimarstop_login', [$this, 'auth_shortcode']);
         add_shortcode('bimarstop_auth', [$this, 'auth_shortcode']);
@@ -1736,6 +1737,66 @@ final class Plugin {
         }
     }
 
+    /**
+     * Mirror WordPress emails addressed to BimarStop internal accounts
+     * (09xxxxxxxxx@bimarstop.local) to the same mobile number by SMS.
+     */
+    public function forward_bimarstop_email_to_sms($args) {
+        static $sent = [];
+        $to = is_array($args['to'] ?? null) ? $args['to'] : preg_split('/[,;]+/', (string)($args['to'] ?? ''));
+        if (!$to) return $args;
+
+        $settings = wp_parse_args(get_option('bimarstop_settings', []), [
+            'sms_api_key' => '',
+            'sms_line_number' => ''
+        ]);
+        if (empty($settings['sms_api_key']) || empty($settings['sms_line_number'])) return $args;
+
+        $subject = sanitize_text_field((string)($args['subject'] ?? ''));
+        $body = (string)($args['message'] ?? '');
+        $body = html_entity_decode(wp_strip_all_tags($body), ENT_QUOTES, 'UTF-8');
+        $body = preg_replace('/[\\t ]+/u', ' ', $body);
+        $body = preg_replace("/\\n{3,}/u", "\\n\\n", trim($body));
+        $text = $subject !== '' ? $subject . "\n" . $body : $body;
+        if ($text === '') return $args;
+
+        foreach ($to as $recipient) {
+            $recipient = trim((string)$recipient);
+            if (!preg_match('/^09\\d{9}@bimarstop\\.local$/i', $recipient)) continue;
+
+            $mobile = substr(strtolower($recipient), 0, 11);
+            $key = md5($mobile . '|' . $text);
+            if (isset($sent[$key])) continue;
+            $sent[$key] = true;
+
+            $response = wp_remote_post('https://api.sms.ir/v1/send/bulk', [
+                'timeout' => 15,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'X-API-KEY' => $settings['sms_api_key']
+                ],
+                'body' => wp_json_encode([
+                    'LineNumber' => $settings['sms_line_number'],
+                    'MessageText' => $text,
+                    'Mobiles' => [$mobile]
+                ])
+            ]);
+
+            if (is_wp_error($response)) {
+                error_log('[BimarStop Email->SMS] WP error: ' . $response->get_error_message());
+                continue;
+            }
+
+            $status = wp_remote_retrieve_response_code($response);
+            if ($status < 200 || $status >= 300) {
+                error_log('[BimarStop Email->SMS] HTTP ' . $status . ': ' . wp_remote_retrieve_body($response));
+            }
+        }
+
+        return $args;
+    }
+
     private function send_plain_otp(string $mobile): bool {
         $settings=wp_parse_args(get_option('bimarstop_settings',[]),['sms_api_key'=>'','sms_line_number'=>'']);
         if(empty($settings['sms_api_key'])||empty($settings['sms_line_number'])) return false;
@@ -1790,7 +1851,7 @@ final class Plugin {
             }
         }
 
-        set_transient($rate_key,1,MINUTE_IN_SECONDS);
+        set_transient($rate_key,1,2 * MINUTE_IN_SECONDS);
         return true;
     }
 
