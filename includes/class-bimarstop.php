@@ -54,7 +54,6 @@ final class Plugin {
         add_action('wp_ajax_bimarstop_move_document_folder', [$this, 'ajax_move_document_folder']);
         add_action('wp_ajax_bimarstop_delete_document_folder', [$this, 'ajax_delete_document_folder']);
         add_action('wp_ajax_bimarstop_share_document', [$this, 'ajax_share_document']);
-        add_action('template_redirect', [$this, 'require_login']);
         add_filter('show_admin_bar', [$this, 'show_admin_bar']);
         add_filter('pre_user_role', [$this, 'force_patient_registration_role'], 10, 2);
         add_action('admin_menu', [$this, 'restrict_role_admin_menu'], 999);
@@ -234,19 +233,6 @@ final class Plugin {
         </div>
         <?php
         return ob_get_clean();
-    }
-
-    public function require_login(): void {
-        if ((is_front_page() || is_home()) && !is_admin()) { wp_redirect(admin_url(), 301); exit; }
-        if (is_user_logged_in()) {
-            if(!$this->profile_is_complete(get_current_user_id()) && !is_page('bimarstop-complete-profile')){
-                wp_safe_redirect(home_url('/bimarstop-complete-profile/')); exit;
-            }
-            return;
-        }
-        if (is_admin() || wp_doing_ajax() || (defined('REST_REQUEST') && REST_REQUEST)) return;
-        if (is_page('bimarstop-register') || is_page('bimarstop-login')) return;
-        wp_safe_redirect(home_url('/bimarstop-login/')); exit;
     }
 
     public function redirect_wp_login(): void {
@@ -1476,7 +1462,7 @@ final class Plugin {
 
     public function auth_shortcode(): string {
         if (is_user_logged_in()) {
-            return '<script>location.href=' . wp_json_encode(admin_url()) . ';</script>';
+            return '<div class="bimarstop-auth-card" dir="rtl"><p>شما وارد حساب خود شده‌اید.</p><a class="bimarstop-auth-btn" href="'.esc_url(admin_url()).'">ورود به پنل</a></div>';
         }
 
         $ajax = home_url('/wp-admin/admin-ajax.php');
