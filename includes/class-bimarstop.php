@@ -967,7 +967,13 @@ final class Plugin {
 
     public function operator_private_chats_page(): void {
         if($this->current_role()!=='bimarstop_operator'&&!current_user_can('manage_options'))return;
-        echo '<section style="background:#fff;padding:18px;border:1px solid #ddd;border-radius:12px"><h2>💬 گفتگوی پزشک و اپراتور</h2><table class="widefat striped"><thead><tr><th>پزشک</th><th>عملیات</th></tr></thead><tbody>';foreach($doctors as $u)echo '<tr><td>'.esc_html($u->display_name?:$u->user_login).'</td><td><a class="button button-primary" href="'.esc_url(admin_url('admin.php?page=bimarstop-doctor-chats&user='.(int)$u->ID)).'">شروع / ادامه چت</a></td></tr>';if(!$doctors)echo '<tr><td colspan="2">پزشکی ثبت نشده است.</td></tr>';echo '</tbody></table></section>';
+        $doctors=$this->users_by_role('bimarstop_doctor');
+        echo '<div class="wrap" dir="rtl"><h1>🩺 چت با پزشکان</h1><section style="background:#fff;padding:18px;border:1px solid #ddd;border-radius:12px"><h2>💬 گفتگوی پزشک و اپراتور</h2><table class="widefat striped"><thead><tr><th>پزشک</th><th>عملیات</th></tr></thead><tbody>';
+        foreach($doctors as $u) echo '<tr><td>'.esc_html($u->display_name?:$u->user_login).'</td><td><a class="button button-primary" href="'.esc_url(admin_url('admin.php?page=bimarstop-doctor-chats&user='.(int)$u->ID)).'">شروع / ادامه چت</a></td></tr>';
+        if(!$doctors) echo '<tr><td colspan="2">پزشکی ثبت نشده است.</td></tr>';
+        echo '</tbody></table></section></div>';
+    }
+
     public function doctor_private_chats_page(): void {
         if ($this->current_role() !== 'bimarstop_doctor' && !current_user_can('manage_options')) return;
         $partner = absint($_GET['user'] ?? 0);
