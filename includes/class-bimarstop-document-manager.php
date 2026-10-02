@@ -91,6 +91,9 @@ final class DocumentManager {
         foreach (get_users(['role' => 'bimarstop_patient', 'fields' => 'ID']) as $id) {
             $this->ensure_owner_root((int) $id, 'bimarstop_patient');
         }
+        foreach (get_users(['role' => 'bimarstop_operator', 'fields' => 'ID']) as $id) {
+            $this->ensure_owner_root((int) $id, 'bimarstop_operator');
+        }
 
         // Rows created by the old document manager may point directly into uploads.
         // Treat those legacy rows as references so deleting a person-folder entry
@@ -109,7 +112,7 @@ final class DocumentManager {
 
         if ($id) return $id;
 
-        $name = $role === 'bimarstop_doctor' ? 'پوشه پزشک' : 'مدارک من';
+        $name = $role === 'bimarstop_doctor' ? 'پوشه پزشک' : ($role === 'bimarstop_operator' ? 'مدارک اپراتور' : 'مدارک من');
         $wpdb->insert($table, [
             'owner_user_id' => $uid,
             'owner_role' => $role,
@@ -183,6 +186,7 @@ CSS;
     private function can_edit_owner(int $owner, string $role): bool {
         $currentRole = $this->role();
         if ($currentRole === 'bimarstop_operator') {
+            if ($role === 'bimarstop_operator') return $owner === get_current_user_id();
             return in_array($role, ['bimarstop_doctor', 'bimarstop_patient'], true);
         }
         return $owner === get_current_user_id() && $role === $currentRole;
@@ -223,7 +227,12 @@ CSS;
         if ($this->is_operator()) {
             $owner = absint($_POST['owner_id'] ?? 0);
             $role = sanitize_key($_POST['owner_role'] ?? '');
-            if (!$owner || !in_array($role, ['bimarstop_doctor','bimarstop_patient'], true)) {
+            if (!$owner || !in_array($role, ['bimarstop_doctor','bimarstop_patient','bimarstop_operator'], true)) {
+                wp_send_json_error(['message' => 'مالک پوشه نامعتبر است.']);
+            }
+            if ($role === 'bimarstop_operator' && $owner !== get_current_user_id()) {
+                wp_send_json_error(['message' => 'اپراتور فقط می‌تواند پوشه‌های خودش را مدیریت کند.']);
+            }
                 wp_send_json_error(['message' => 'مالک پوشه نامعتبر است.']);
             }
         }
@@ -436,7 +445,8 @@ CSS;
         $ok = false;
 
         if ($role === 'bimarstop_operator') {
-            $ok = in_array($doc->owner_role, ['bimarstop_patient','bimarstop_doctor'], true);
+            $ok = ($doc->owner_role === 'bimarstop_operator' && (int)$doc->owner_user_id === $uid)
+                || in_array($doc->owner_role, ['bimarstop_patient','bimarstop_doctor'], true);
         } elseif ($role === $doc->owner_role && (int)$doc->owner_user_id === $uid) {
             $ok = true;
         }
@@ -612,6 +622,12 @@ CSS;
         echo '<section class="bimar-docs-section">';
         echo '<h2>👨‍⚕️👤 فایل‌های پزشک و بیمار</h2>';
         echo '<p>پوشه‌ها به‌صورت کوچک نمایش داده می‌شوند و می‌توانید آن‌ها را باز یا مینیمایز کنید. فایل اصلی را مستقیم روی هر پوشه رها کنید تا فقط به آن پوشه اضافه شود.</p>';
+
+        echo '<h2 style="margin-top:22px">🧑‍💼 اپراتور</h2>';
+        echo '<div class="bimar-person-grid">';
+        $operator = wp_get_current_user();
+        if ($operator && $operator->ID) $this->render_person_card($operator, 'bimarstop_operator');
+        echo '</div>';
 
         echo '<h2 style="margin-top:22px">👨‍⚕️ پزشکان</h2>';
         echo '<div class="bimar-person-grid">';
