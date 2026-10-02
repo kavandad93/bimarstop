@@ -55,3 +55,16 @@ body.bimarstop-site:has(#bs-login-mobile),body.bimarstop-site:has(#bimarstop-reg
 
 /* Accessibility + mobile safety */
 html,body{max-width:100%;overflow-x:hidden}.bimarstop-site *{max-width:100%;box-sizing:border-box}.bimarstop-site img,.bimarstop-site video{max-width:100%;height:auto}.bimarstop-site button,.bimarstop-site input,.bimarstop-site select,.bimarstop-site textarea{max-width:100%;}.bimarstop-site .wrap{max-width:100%;overflow-x:hidden}.bimarstop-site a{overflow-wrap:anywhere;word-break:break-word}@media(max-width:782px){body.wp-admin #wpbody-content{padding-bottom:20px}.bimarstop-site .wrap{padding:0 10px}.bimarstop-site .widefat{display:block;overflow-x:auto}.bimarstop-site .button,.bimarstop-site button{min-height:44px}.bimarstop-site input,.bimarstop-site select,.bimarstop-site textarea{font-size:16px!important;max-width:100%;}.bimarstop-site .form-table,.bimarstop-site .form-table tbody,.bimarstop-site .form-table tr,.bimarstop-site .form-table th,.bimarstop-site .form-table td{display:block;width:100%;}.bimarstop-site .form-table th{padding-bottom:5px}.bimarstop-site .form-table td{padding-top:0}}
+
+
+/* Authentication: robust layout for large system font / accessibility scaling */
+.bimarstop-auth-card,.bimarstop-auth-card *{min-width:0}
+.bimarstop-auth-brand{flex-wrap:wrap}
+.bimarstop-auth-title,.bimarstop-auth-subtitle,.bimarstop-auth-label,.bimarstop-auth-hint,.bimarstop-auth-status,.bimarstop-auth-footer{overflow-wrap:anywhere;word-break:break-word}
+@media(max-width:520px){
+.bimarstop-auth-card{width:calc(100vw - 20px);padding:24px 16px 20px;margin:10px auto 18px;border-radius:20px}
+.bimarstop-auth-brand{gap:10px;margin-bottom:20px}.bimarstop-auth-logo{width:44px;height:44px;flex-basis:44px;font-size:21px;border-radius:13px}
+.bimarstop-auth-title{font-size:clamp(18px,5vw,22px);line-height:1.35}.bimarstop-auth-subtitle{font-size:clamp(11px,3.3vw,13px);line-height:1.7}.bimarstop-auth-label{font-size:14px;line-height:1.6}
+.bimarstop-auth-field{height:auto!important;min-height:52px!important;line-height:1.4!important;padding:10px 14px!important;font-size:16px!important}.bimarstop-auth-btn{height:auto!important;min-height:52px!important;line-height:1.45!important;padding:10px 42px 10px 38px!important;font-size:15px!important}.bimarstop-auth-btn:after{left:14px}
+.bimarstop-auth-otp{margin-top:16px;padding-top:16px}#bs-login-code,#bimarstop-register-otp,#bimarstop-auth-code{letter-spacing:5px;font-size:18px!important;padding:10px!important}}
+@media(max-width:380px){.bimarstop-auth-card{width:calc(100vw - 12px);padding:20px 12px 17px}.bimarstop-auth-brand{align-items:flex-start}.bimarstop-auth-logo{width:40px;height:40px;flex-basis:40px}.bimarstop-auth-btn{padding-left:34px!important;padding-right:34px!important}}
