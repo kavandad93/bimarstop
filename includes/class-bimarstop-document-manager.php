@@ -88,6 +88,11 @@ final class DocumentManager {
         foreach (get_users(['role' => 'bimarstop_patient', 'fields' => 'ID']) as $id) {
             $this->ensure_owner_root((int) $id, 'bimarstop_patient');
         }
+
+        // Rows created by the old document manager may point directly into uploads.
+        // Treat those legacy rows as references so deleting a person-folder entry
+        // can never accidentally delete the real uploads file.
+        $wpdb->query("UPDATE {$docs} SET source_path=path, is_reference=1 WHERE (source_path IS NULL OR source_path='')");
     }
 
     private function ensure_owner_root(int $uid, string $role): int {
@@ -330,11 +335,6 @@ CSS;
             wp_send_json_error(['message' => 'فایل اصلی نامعتبر است.']);
         }
 
-        $ext = strtolower(pathinfo($real, PATHINFO_EXTENSION));
-        if (!in_array($ext, ['pdf','jpg','jpeg','png','webp','doc','docx'], true)) {
-            wp_send_json_error(['message' => 'این نوع فایل قابل استفاده نیست.']);
-        }
-
         $name = sanitize_file_name(wp_basename($real));
         $size = (int) filesize($real);
         $type = wp_check_filetype($name)['type'] ?: 'application/octet-stream';
@@ -458,8 +458,6 @@ CSS;
     private function render_main_file(string $path, string $relative): void {
         if (!$this->valid_upload_path($path)) return;
         $name = wp_basename($path);
-        if (!$this->allowed_extension($name)) return;
-
         echo '<div class="bimar-main-file" draggable="true" data-main-drag="' . esc_attr($path) . '">';
         echo '<span>📄</span><strong>' . esc_html($name) . '</strong>';
         echo '<small>' . esc_html(size_format((int) filesize($path))) . '</small>';
