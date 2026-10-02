@@ -578,6 +578,15 @@ CSS;
         echo '<label class="bimar-person-upload">📤 فایل را انتخاب کنید<input type="file" hidden multiple data-doc-upload data-folder="'.$root.'" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"></label>';
         $this->render_person_files($owner,$role,$root);
         $this->render_person_folder_tree($owner,$role,$root,$children);
+        $hidden=array_filter($folders,function($f){return (int)$f->is_hidden===1;});
+        if($hidden){
+            echo '<details class="bimar-person-subfolder" style="margin-top:10px"><summary>🙈 پوشه‌های مخفی ('.count($hidden).')</summary>';
+            echo '<div class="bimar-folder-tools">';
+            foreach($hidden as $hf){
+                echo '<span><button type="button" class="button" data-folder-hide="'.(int)$hf->id.'" data-hidden="1">👁 نمایش «'.esc_html($hf->name).'»</button></span>';
+            }
+            echo '</div></details>';
+        }
         echo '</div></div>';
     }
 
