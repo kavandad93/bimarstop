@@ -21,6 +21,8 @@ final class DocumentManager {
         add_action('wp_ajax_bimarstop_docs_move', [$this, 'ajax_move']);
         add_action('wp_ajax_bimarstop_docs_delete', [$this, 'ajax_delete']);
         add_action('wp_ajax_bimarstop_docs_download', [$this, 'ajax_download']);
+        add_action('wp_ajax_bimarstop_docs_folder_delete', [$this, 'ajax_folder_delete']);
+        add_action('wp_ajax_bimarstop_docs_folder_hide', [$this, 'ajax_folder_hide']);
     }
 
     private function role(): string {
@@ -57,6 +59,7 @@ final class DocumentManager {
             parent_id bigint(20) unsigned NOT NULL DEFAULT 0,
             created_by bigint(20) unsigned NOT NULL DEFAULT 0,
             created_at datetime NOT NULL,
+            is_hidden tinyint(1) NOT NULL DEFAULT 0,
             PRIMARY KEY (id),
             KEY owner_user_id (owner_user_id),
             KEY parent_id (parent_id)
@@ -158,7 +161,7 @@ final class DocumentManager {
 .bimar-person-upload{display:inline-flex;align-items:center;justify-content:center;gap:6px;width:100%;min-height:42px;margin:4px 0 8px;border:1px dashed #94a3b8;border-radius:10px;background:#f8fafc;cursor:pointer}
 .bimar-person-upload:hover{background:#eff6ff}
 .bimar-person-empty{text-align:center;color:#64748b;padding:13px 6px;font-size:13px}
-.bimar-person-subfolder{border:1px solid #e2e8f0;border-radius:10px;margin-top:8px;padding:8px}.bimar-folder-toolbar,.bimar-folder-tools{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0}.bimar-folder-toolbar .button,.bimar-folder-tools .button{min-height:36px}
+.bimar-person-subfolder{border:1px solid #e2e8f0;border-radius:10px;margin-top:8px;padding:8px}.bimar-folder-toolbar,.bimar-folder-tools{display:flex;gap:6px;flex-wrap:wrap;margin:7px 0}.bimar-folder-toolbar .button,.bimar-folder-tools .button{min-height:36px}.bimar-folder-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.bimar-folder-head summary{flex:1}.bimar-folder-tools{margin:0}.bimar-folder-tools button{cursor:pointer}
 .bimar-person-subfolder summary{cursor:pointer;font-weight:700}
 .bimar-person-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
 .bimar-person-actions button{min-height:36px}
@@ -170,7 +173,8 @@ CSS;
 
     private function js(): string {
         $nonce=wp_create_nonce('bimarstop_personal_docs'); $ajax=admin_url('admin-ajax.php');
-        return '(function(){if(window.__bimarDocsV3)return;window.__bimarDocsV3=1;window.BimarDocs={nonce:"'.esc_js($nonce).'",ajax:"'.esc_url_raw($ajax).'"};function call(a,d){var f=new FormData();f.append("action",a);f.append("nonce",BimarDocs.nonce);Object.keys(d||{}).forEach(function(k){f.append(k,d[k])});return fetch(BimarDocs.ajax,{method:"POST",body:f}).then(function(r){return r.json()})}function reload(){location.reload()}document.addEventListener("click",function(e){var t=e.target.closest("[data-person-toggle]");if(t){var b=[].find.call(document.querySelectorAll("[data-person-body]"),function(x){return x.dataset.personBody===t.dataset.personToggle});if(b){b.classList.toggle("collapsed");t.textContent=b.classList.contains("collapsed")?"＋":"−";localStorage.setItem("bimar-doc-person-"+t.dataset.personToggle,b.classList.contains("collapsed")?"1":"0")}return}var c=e.target.closest("[data-folder-create-owner]");if(c){var n=prompt("نام پوشه جدید:");if(n)call("bimarstop_docs_folder",{name:n,owner_id:c.dataset.folderCreateOwner,owner_role:c.dataset.folderCreateRole,parent_id:0}).then(function(x){x.success?reload():alert(x.data.message)});return}var h=e.target.closest("[data-folder-hide]");if(h){call("bimarstop_docs_folder_hide",{folder_id:h.dataset.folderHide,hidden:h.dataset.hidden==="1"?0:1}).then(function(x){x.success?reload():alert(x.data.message)});return}var f=e.target.closest("[data-folder-delete]");if(f&&confirm("پوشه حذف شود؟ فقط پوشه خالی قابل حذف است."))call("bimarstop_docs_folder_delete",{folder_id:f.dataset.folderDelete}).then(function(x){x.success?reload():alert(x.data.message)});var d=e.target.closest("[data-doc-delete]");if(d&&confirm("این فایل فقط از پوشه فرد حذف شود؟"))call("bimarstop_docs_delete",{doc_id:d.dataset.docDelete}).then(function(x){x.success?reload():alert(x.data.message)})});document.addEventListener("change",function(e){var i=e.target;if(!i.matches("[data-doc-upload]")||!i.files.length)return;var f=new FormData();f.append("action","bimarstop_docs_upload");f.append("nonce",BimarDocs.nonce);f.append("folder_id",i.dataset.folder);[].forEach.call(i.files,function(x){f.append("files[]",x)});fetch(BimarDocs.ajax,{method:"POST",body:f}).then(function(r){return r.json()}).then(function(x){x.success?reload():alert(x.data.message)})});document.addEventListener("dragover",function(e){var t=e.target.closest("[data-drop-folder]");if(t){e.preventDefault();t.classList.add("drop-over")}});document.addEventListener("drop",function(e){var t=e.target.closest("[data-drop-folder]");if(!t)return;e.preventDefault();t.classList.remove("drop-over");var id=t.dataset.dropFolder;if(e.dataTransfer.files&&e.dataTransfer.files.length){var f=new FormData();f.append("action","bimarstop_docs_upload");f.append("nonce",BimarDocs.nonce);f.append("folder_id",id);[].forEach.call(e.dataTransfer.files,function(x){f.append("files[]",x)});fetch(BimarDocs.ajax,{method:"POST",body:f}).then(function(r){return r.json()}).then(function(x){x.success?reload():alert(x.data.message)});return}var raw=window.__bimarDragged;if(!raw)return;window.__bimarDragged=null;call(raw.indexOf("main:")===0?"bimarstop_docs_copy_main":"bimarstop_docs_move",raw.indexOf("main:")===0?{path:raw.slice(5),folder_id:id}:{doc_id:raw.slice(4),folder_id:id}).then(function(x){x.success?reload():alert(x.data.message)})});document.addEventListener("dragstart",function(e){var m=e.target.closest("[data-main-drag]"),d=e.target.closest("[data-doc-drag]");if(m)window.__bimarDragged="main:"+m.dataset.mainDrag;else if(d)window.__bimarDragged="doc:"+d.dataset.docDrag});document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("[data-person-body]").forEach(function(b){if(localStorage.getItem("bimar-doc-person-"+b.dataset.personBody)==="1"){b.classList.add("collapsed");document.querySelector("[data-person-toggle=\""+b.dataset.personBody+"\"]")?.textContent="＋"}})})()';}
+        return '(function(){if(window.__bimarDocsV4)return;window.__bimarDocsV4=1;window.BimarDocs={nonce:"'.esc_js($nonce).'",ajax:"'.esc_url_raw($ajax).'"};function call(a,d){var f=new FormData();f.append("action",a);f.append("nonce",BimarDocs.nonce);Object.keys(d||{}).forEach(function(k){f.append(k,d[k])});return fetch(BimarDocs.ajax,{method:"POST",body:f}).then(function(r){return r.json()})}function reload(){location.reload()}document.addEventListener("click",function(e){var t=e.target.closest("[data-person-toggle]");if(t){var b=document.querySelector("[data-person-body=\\\""+t.dataset.personToggle+"\\\"]");if(b){b.classList.toggle("collapsed");t.textContent=b.classList.contains("collapsed")?"＋":"−";localStorage.setItem("bimar-doc-person-"+t.dataset.personToggle,b.classList.contains("collapsed")?"1":"0")}return}var c=e.target.closest("[data-folder-create-owner]");if(c){var n=prompt("نام پوشه جدید:");if(n)call("bimarstop_docs_folder",{name:n,owner_id:c.dataset.folderCreateOwner,owner_role:c.dataset.folderCreateRole,parent_id:c.dataset.folderParent||0}).then(function(x){x.success?reload():alert(x.data.message)});return}var h=e.target.closest("[data-folder-hide]");if(h){call("bimarstop_docs_folder_hide",{folder_id:h.dataset.folderHide,hidden:h.dataset.hidden==="1"?0:1}).then(function(x){x.success?reload():alert(x.data.message)});return}var f=e.target.closest("[data-folder-delete]");if(f&&confirm("پوشه حذف شود؟ فقط پوشه خالی قابل حذف است."))call("bimarstop_docs_folder_delete",{folder_id:f.dataset.folderDelete}).then(function(x){x.success?reload():alert(x.data.message)});var d=e.target.closest("[data-doc-delete]");if(d&&confirm("این فایل فقط از پوشه فرد حذف شود؟"))call("bimarstop_docs_delete",{doc_id:d.dataset.docDelete}).then(function(x){x.success?reload():alert(x.data.message)})});document.addEventListener("change",function(e){var i=e.target;if(!i.matches("[data-doc-upload]")||!i.files.length)return;var f=new FormData();f.append("action","bimarstop_docs_upload");f.append("nonce",BimarDocs.nonce);f.append("folder_id",i.dataset.folder);[].forEach.call(i.files,function(x){f.append("files[]",x)});fetch(BimarDocs.ajax,{method:"POST",body:f}).then(function(r){return r.json()}).then(function(x){x.success?reload():alert(x.data.message)})});document.addEventListener("dragover",function(e){var t=e.target.closest("[data-drop-folder]");if(t){e.preventDefault();t.classList.add("drop-over")}});document.addEventListener("dragleave",function(e){var t=e.target.closest("[data-drop-folder]");if(t&&(!e.relatedTarget||!t.contains(e.relatedTarget)))t.classList.remove("drop-over")});document.addEventListener("drop",function(e){var t=e.target.closest("[data-drop-folder]");if(!t)return;e.preventDefault();t.classList.remove("drop-over");var id=t.dataset.dropFolder;if(e.dataTransfer.files&&e.dataTransfer.files.length){var f=new FormData();f.append("action","bimarstop_docs_upload");f.append("nonce",BimarDocs.nonce);f.append("folder_id",id);[].forEach.call(e.dataTransfer.files,function(x){f.append("files[]",x)});fetch(BimarDocs.ajax,{method:"POST",body:f}).then(function(r){return r.json()}).then(function(x){x.success?reload():alert(x.data.message)});return}var raw=window.__bimarDragged;if(!raw)return;window.__bimarDragged=null;call(raw.indexOf("main:")===0?"bimarstop_docs_copy_main":"bimarstop_docs_move",raw.indexOf("main:")===0?{path:raw.slice(5),folder_id:id}:{doc_id:raw.slice(4),folder_id:id}).then(function(x){x.success?reload():alert(x.data.message)})});document.addEventListener("dragstart",function(e){var m=e.target.closest("[data-main-drag]"),d=e.target.closest("[data-doc-drag]");if(m)window.__bimarDragged="main:"+m.dataset.mainDrag;else if(d)window.__bimarDragged="doc:"+d.dataset.docDrag});document.addEventListener("DOMContentLoaded",function(){document.querySelectorAll("[data-person-body]").forEach(function(b){if(localStorage.getItem("bimar-doc-person-"+b.dataset.personBody)==="1"){b.classList.add("collapsed");var t=document.querySelector("[data-person-toggle=\\\""+b.dataset.personBody+"\\\"]");if(t)t.textContent="＋"}})})()';
+    }
     private function check_nonce(): void {
         if (!$this->allowed()) wp_send_json_error(['message' => 'دسترسی غیرمجاز.'], 403);
         check_ajax_referer('bimarstop_personal_docs', 'nonce');
@@ -447,6 +451,24 @@ CSS;
         exit;
     }
 
+    public function ajax_folder_delete(): void {
+        $this->check_nonce(); if(!$this->is_operator()) wp_send_json_error(['message'=>'فقط اپراتور می‌تواند پوشه‌ها را مدیریت کند.'],403);
+        global $wpdb; $id=absint($_POST['folder_id']??0); $f=$this->folder_row($id);
+        if(!$f||!$this->can_edit_owner((int)$f->owner_user_id,$f->owner_role)) wp_send_json_error(['message'=>'دسترسی غیرمجاز.'],403);
+        $hasDocs=(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}bimarstop_personal_docs WHERE folder_id=%d",$id));
+        $hasChildren=(int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM {$wpdb->prefix}bimarstop_personal_doc_folders WHERE parent_id=%d",$id));
+        if($hasDocs||$hasChildren) wp_send_json_error(['message'=>'این پوشه خالی نیست. ابتدا فایل‌ها و زیرپوشه‌ها را جابه‌جا یا حذف کنید.']);
+        $wpdb->delete($wpdb->prefix.'bimarstop_personal_doc_folders',['id'=>$id],['%d']); wp_send_json_success();
+    }
+
+    public function ajax_folder_hide(): void {
+        $this->check_nonce(); if(!$this->is_operator()) wp_send_json_error(['message'=>'فقط اپراتور می‌تواند پوشه‌ها را مدیریت کند.'],403);
+        global $wpdb; $id=absint($_POST['folder_id']??0); $f=$this->folder_row($id);
+        if(!$f||!$this->can_edit_owner((int)$f->owner_user_id,$f->owner_role)) wp_send_json_error(['message'=>'دسترسی غیرمجاز.'],403);
+        $hidden=absint($_POST['hidden']??0)?1:0;
+        $wpdb->update($wpdb->prefix.'bimarstop_personal_doc_folders',['is_hidden'=>$hidden],['id'=>$id],['%d'],['%d']); wp_send_json_success();
+    }
+
     private function person_label($user): string {
         return $user->display_name ?: $user->user_login;
     }
@@ -521,46 +543,41 @@ CSS;
         }
     }
 
+    private function render_person_folder_tree(int $owner, string $role, int $parentId, array $children): void {
+        foreach (($children[$parentId] ?? []) as $folder) {
+            if ((int)$folder->is_hidden) continue;
+            $fid=(int)$folder->id;
+            echo '<details class="bimar-person-subfolder" open data-drop-folder="'.$fid.'">';
+            echo '<summary>📁 '.esc_html($folder->name).'</summary>';
+            echo '<div class="bimar-folder-tools">';
+            echo '<button type="button" class="button" data-folder-create-owner="'.$owner.'" data-folder-create-role="'.$role.'" data-folder-parent="'.$fid.'">📁 زیرپوشه جدید</button>';
+            echo '<button type="button" class="button" data-folder-hide="'.$fid.'" data-hidden="1">🙈 مخفی</button>';
+            echo '<button type="button" class="button" data-folder-delete="'.$fid.'">🗑 حذف پوشه</button>';
+            echo '</div>';
+            echo '<label class="bimar-person-upload">📤 افزودن فایل<input type="file" hidden multiple data-doc-upload data-folder="'.$fid.'" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"></label>';
+            $this->render_person_files($owner,$role,$fid);
+            $this->render_person_folder_tree($owner,$role,$fid,$children);
+            echo '</details>';
+        }
+    }
+
     private function render_person_card($user, string $role): void {
-        $owner = (int)$user->ID;
-        $root = $this->ensure_owner_root($owner, $role);
-
+        $owner=(int)$user->ID; $root=$this->ensure_owner_root($owner,$role);
         global $wpdb;
-        $folders = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$wpdb->prefix}bimarstop_personal_doc_folders WHERE owner_user_id=%d AND owner_role=%s ORDER BY parent_id ASC, name ASC",
-            $owner,
-            $role
-        ));
-
-        $children = [];
-        foreach ($folders as $folder) {
-            $children[(int)$folder->parent_id][] = $folder;
-        }
-
-        $collapsed = $this->is_operator() ? '1' : '0';
-        $name = $this->person_label($user);
-
-        echo '<div class="bimar-person-card" data-drop-folder="' . $root . '">';
-        echo '<div class="bimar-person-head">';
-        echo '<strong>' . ($role === 'bimarstop_doctor' ? '👨‍⚕️ ' : '👤 ') . esc_html($name) . '</strong>';
-        echo '<button type="button" data-person-toggle="' . $root . '">' . ($collapsed ? '＋' : '−') . '</button>';
+        $folders=$wpdb->get_results($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_personal_doc_folders WHERE owner_user_id=%d AND owner_role=%s ORDER BY parent_id ASC,name ASC",$owner,$role));
+        $children=[];
+        foreach($folders as $folder){$children[(int)$folder->parent_id][]=$folder;}
+        $name=$this->person_label($user); $collapsed=$this->is_operator()?'1':'0';
+        echo '<div class="bimar-person-card" data-drop-folder="'.$root.'">';
+        echo '<div class="bimar-person-head"><strong>'.($role==='bimarstop_doctor'?'👨‍⚕️ ':'👤 ').esc_html($name).'</strong><button type="button" data-person-toggle="'.$root.'">'.($collapsed?'＋':'−').'</button></div>';
+        echo '<div class="bimar-person-body'.($collapsed?' collapsed':'').'" data-person-body="'.$root.'">';
+        echo '<div class="bimar-folder-toolbar">';
+        echo '<button type="button" class="button button-primary" data-folder-create-owner="'.$owner.'" data-folder-create-role="'.$role.'" data-folder-parent="0">📁 پوشه جدید</button>';
+        echo '<button type="button" class="button" data-folder-create-owner="'.$owner.'" data-folder-create-role="'.$role.'" data-folder-parent="'.$root.'">📁 زیرپوشه در پوشه اصلی</button>';
         echo '</div>';
-        echo '<div class="bimar-person-body' . ($collapsed ? ' collapsed' : '') . '" data-person-body="' . $root . '">';
-
-        echo '<label class="bimar-person-upload">📤 فایل را انتخاب کنید';
-        echo '<input type="file" hidden multiple data-doc-upload data-folder="' . $root . '" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx">';
-        echo '</label>';
-
-        $this->render_person_files($owner, $role, $root);
-
-        foreach (($children[$root] ?? []) as $folder) {
-            echo '<details class="bimar-person-subfolder"><summary>📁 ' . esc_html($folder->name) . '</summary>';
-            echo '<div data-drop-folder="' . (int)$folder->id . '">';
-            echo '<label class="bimar-person-upload">📤 افزودن فایل<input type="file" hidden multiple data-doc-upload data-folder="' . (int)$folder->id . '" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"></label>';
-            $this->render_person_files($owner, $role, (int)$folder->id);
-            echo '</div></details>';
-        }
-
+        echo '<label class="bimar-person-upload">📤 فایل را انتخاب کنید<input type="file" hidden multiple data-doc-upload data-folder="'.$root.'" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx"></label>';
+        $this->render_person_files($owner,$role,$root);
+        $this->render_person_folder_tree($owner,$role,$root,$children);
         echo '</div></div>';
     }
 
