@@ -1895,9 +1895,32 @@ final class Plugin {
         if (!current_user_can('read')) return;
         $role = $this->current_role();
         if (!in_array($role, ['bimarstop_patient', 'bimarstop_doctor'], true)) return;
-        $parent = 'bimarstop-home';
-        global $submenu;
-        $items = $submenu[$parent] ?? [];
+        global $menu, $submenu;
+        $items = [];
+        $seen = [];
+        // Read the actual WordPress admin navigation after every plugin has registered its pages.
+        foreach ((array)$submenu as $parent_slug => $entries) {
+            foreach ((array)$entries as $item) {
+                $label = trim(wp_strip_all_tags($item[0] ?? ''));
+                $slug = (string)($item[2] ?? '');
+                $cap = (string)($item[1] ?? 'read');
+                if ($label === '' || $slug === '' || $slug === 'bimarstop-home' || isset($seen[$slug])) continue;
+                if (!current_user_can($cap)) continue;
+                $seen[$slug] = true;
+                $items[] = ['label'=>$label, 'slug'=>$slug, 'parent'=>$parent_slug];
+            }
+        }
+        // Include permitted plugin pages that are top-level and do not expose a submenu.
+        foreach ((array)$menu as $entry) {
+            $label = trim(wp_strip_all_tags($entry[0] ?? ''));
+            $slug = (string)($entry[2] ?? '');
+            $cap = (string)($entry[1] ?? 'read');
+            if ($label === '' || $slug === '' || $slug === 'bimarstop-home' || isset($seen[$slug])) continue;
+            if (!current_user_can($cap)) continue;
+            if (in_array($slug, ['index.php','profile.php','upload.php','edit.php','tools.php','options-general.php','plugins.php','themes.php','users.php'], true)) continue;
+            $seen[$slug] = true;
+            $items[] = ['label'=>$label, 'slug'=>$slug, 'parent'=>''];
+        }
         $manual = [
             'bimarstop-chat' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-5 4v-4.3A2.5 2.5 0 0 1 4 13.5z"/><path d="M8 8h8M8 11h5"/></svg>',
             'bimarstop-doctor-chats' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg>',
@@ -1906,23 +1929,17 @@ final class Plugin {
             'bimarstop-patient-documents' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 12h6m-6 4h6"/></svg>',
         ];
         echo '<div class="wrap bimar-role-dashboard" dir="rtl">';
-        echo '<header class="bimar-role-welcome"><span class="bimar-role-eyebrow">BimarStop</span><h1>'.($role === 'bimarstop_doctor' ? 'داشبورد پزشک' : 'داشبورد بیمار').'</h1><p>برای ورود به هر بخش، کارت مربوط به آن را انتخاب کنید.</p></header>';
+        echo '<header class="bimar-role-welcome"><span class="bimar-role-eyebrow">BimarStop</span><h1>'.($role === 'bimarstop_doctor' ? 'داشبورد پزشک' : 'داشبورد بیمار').'</h1><p>همه بخش‌هایی که در منوی حساب شما فعال هستند، به‌صورت خودکار اینجا نمایش داده می‌شوند.</p></header>';
         echo '<div class="bimar-role-card-grid">';
-        $rendered = [];
         foreach ($items as $item) {
-            $label = trim(wp_strip_all_tags($item[0] ?? ''));
-            $slug = (string)($item[2] ?? '');
-            if ($label === '' || $slug === '' || $slug === $parent || in_array($slug, $rendered, true)) continue;
-            if (!empty($item[1]) && !current_user_can($item[1])) continue;
-            $rendered[] = $slug;
-            $href = admin_url('admin.php?page=' . rawurlencode($slug));
+            $slug = $item['slug'];
+            $href = strpos($slug, 'http://') === 0 || strpos($slug, 'https://') === 0 ? $slug : (strpos($slug, '.php') !== false ? admin_url($slug) : admin_url('admin.php?page=' . rawurlencode($slug)));
             $svg = $manual[$slug] ?? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v10m-5-5h10"/></svg>';
-            echo '<a class="bimar-role-card" href="'.esc_url($href).'"><span class="bimar-role-card-icon">'.$svg.'</span><span class="bimar-role-card-title">'.esc_html($label).'</span><span class="bimar-role-card-arrow" aria-hidden="true">←</span></a>';
+            echo '<a class="bimar-role-card" href="'.esc_url($href).'"><span class="bimar-role-card-icon">'.$svg.'</span><span class="bimar-role-card-title">'.esc_html($item['label']).'</span><span class="bimar-role-card-arrow" aria-hidden="true">←</span></a>';
         }
-        if (!$rendered) echo '<p>در حال حاضر بخشی برای نمایش وجود ندارد.</p>';
+        if (!$items) echo '<p>در حال حاضر بخشی برای نمایش وجود ندارد.</p>';
         echo '</div></div>';
     }
-
     public function role_placeholder(): void { if (!current_user_can('read')) return; echo '<div class="wrap" dir="rtl"><h1>BimarStop</h1><p>این بخش در حال توسعه است.</p></div>'; }
 
     public function placeholder_page(): void {
