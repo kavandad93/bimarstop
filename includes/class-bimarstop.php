@@ -171,7 +171,7 @@ final class Plugin {
 
         $user_id=get_current_user_id();
         if($this->profile_is_complete($user_id)){
-            wp_safe_redirect(admin_url());
+            wp_safe_redirect($this->dashboard_url_for_user($user_id));
             exit;
         }
 
@@ -198,7 +198,7 @@ final class Plugin {
                         update_user_meta($user_id,'bimarstop_last_name',$last_name);
                         update_user_meta($user_id,'bimarstop_birth_date_shamsi',$birth_date);
                         wp_update_user(['ID'=>$user_id,'first_name'=>$first_name,'last_name'=>$last_name,'display_name'=>trim($first_name.' '.$last_name)]);
-                        wp_safe_redirect(admin_url());
+                        wp_safe_redirect($this->dashboard_url_for_user($user_id));
                         exit;
                     }
                 }
@@ -237,7 +237,7 @@ final class Plugin {
 
     public function redirect_wp_login(): void {
         if(isset($_GET['action']) && $_GET['action']==='logout') return;
-        if(is_user_logged_in()){ wp_safe_redirect(admin_url()); exit; }
+        if(is_user_logged_in()){ wp_safe_redirect($this->dashboard_url_for_user(get_current_user_id())); exit; }
 
         // wp-login.php remains available for administrators and other staff.
         // The BimarStop OTP page is still the primary login flow for patients.
@@ -256,7 +256,16 @@ final class Plugin {
     }
 
     public function redirect_patient_dashboard(): void {
-        // Keep the native WordPress dashboard available; BimarStop renders its own role-aware home there.
+        if (!is_user_logged_in() || wp_doing_ajax()) return;
+
+        $role = $this->current_role();
+        if (!in_array($role, ['bimarstop_patient', 'bimarstop_doctor'], true)) return;
+
+        // Send these roles to the custom BimarStop dashboard instead of the empty WP dashboard.
+        if (!empty($GLOBALS['pagenow']) && $GLOBALS['pagenow'] === 'index.php') {
+            wp_safe_redirect($this->dashboard_url_for_user(get_current_user_id()));
+            exit;
+        }
     }
 
     public function restrict_role_admin_menu(): void {
@@ -284,6 +293,22 @@ final class Plugin {
     private function current_role(): string {
         $user = wp_get_current_user();
         return $user && !empty($user->roles) ? (string) $user->roles[0] : '';
+    }
+
+    private function dashboard_url_for_user(int $user_id = 0): string {
+        $user_id = $user_id > 0 ? $user_id : get_current_user_id();
+        $user = $user_id > 0 ? get_userdata($user_id) : false;
+        $roles = $user ? (array) $user->roles : [];
+
+        if (in_array('bimarstop_patient', $roles, true) || in_array('bimarstop_doctor', $roles, true)) {
+            return admin_url('admin.php?page=bimarstop-home');
+        }
+
+        if (in_array('bimarstop_operator', $roles, true)) {
+            return admin_url('admin.php?page=bimarstop');
+        }
+
+        return admin_url();
     }
 
     private static function create_chat_tables(): void {
@@ -1477,7 +1502,7 @@ final class Plugin {
 
     public function auth_shortcode(): string {
         if (is_user_logged_in()) {
-            return '<div class="bimarstop-auth-card" dir="rtl"><p>شما وارد حساب خود شده‌اید.</p><a class="bimarstop-auth-btn" href="'.esc_url(admin_url()).'">ورود به پنل</a></div>';
+            return '<div class="bimarstop-auth-card" dir="rtl"><p>شما وارد حساب خود شده‌اید.</p><a class="bimarstop-auth-btn" href="'.esc_url($this->dashboard_url_for_user(get_current_user_id())).'">ورود به پنل</a></div>';
         }
 
         $ajax = home_url('/wp-admin/admin-ajax.php');
@@ -1916,7 +1941,7 @@ final class Plugin {
         wp_set_auth_cookie($user_id, true, is_ssl());
         wp_set_current_user($user_id);
 
-        wp_send_json_success(['redirect'=>admin_url()]);
+        wp_send_json_success(['redirect'=>$this->dashboard_url_for_user((int)$user_id)]);
     }
 
     public function role_dashboard(): void {
