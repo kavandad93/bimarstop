@@ -256,24 +256,14 @@ final class Plugin {
     }
 
     public function redirect_patient_dashboard(): void {
-        if (!is_user_logged_in()) return;
-        $role=$this->current_role();
-        if (!in_array($role, ['bimarstop_patient','bimarstop_doctor'], true)) return;
-        global $pagenow;
-        if ($pagenow === 'index.php') {
-            $target=$role==='bimarstop_doctor'?'bimarstop-doctor-chats':'bimarstop-chat';
-            wp_safe_redirect(admin_url('admin.php?page='.$target));
-            exit;
-        }
+        // Keep the native WordPress dashboard available; BimarStop renders its own role-aware home there.
     }
 
     public function restrict_role_admin_menu(): void {
         if (!is_user_logged_in() || current_user_can('manage_options')) return;
         $role = $this->current_role();
         if ($role === 'bimarstop_patient' || $role === 'bimarstop_doctor' || $role === 'bimarstop_operator') {
-            if (in_array($role, ['bimarstop_patient','bimarstop_doctor'], true)) {
-                remove_menu_page('index.php');
-            }
+            // Dashboard stays available for patient and doctor accounts.
             $menus = [
                 'about.php',
                 'edit.php',
@@ -535,26 +525,51 @@ final class Plugin {
                 font-family: "Vazirmatn", Tahoma, Arial, sans-serif !important;
             }
         ');
+        if (in_array($this->current_role(), ['bimarstop_patient','bimarstop_doctor'], true)) {
+            wp_add_inline_style('bimarstop-admin-font', '
+                #adminmenuback,#adminmenuwrap{display:none!important}
+                #wpcontent,#wpfooter{margin-right:0!important;margin-left:0!important}
+                #wpbody-content{padding:24px 28px 40px}
+                .bimar-role-dashboard{max-width:1180px!important;margin:12px auto!important}
+                .bimar-role-welcome{padding:28px 30px;border:1px solid rgba(255,255,255,.24);border-radius:24px;background:linear-gradient(125deg,#123b76,#2563eb 58%,#38bdf8);color:#fff;box-shadow:0 18px 50px rgba(37,99,235,.18);margin:0 0 24px}
+                .bimar-role-welcome h1{color:#fff;font-size:27px;margin:5px 0 8px}
+                .bimar-role-welcome p{color:rgba(255,255,255,.88);margin:0;font-size:14px}
+                .bimar-role-eyebrow{font-size:12px;letter-spacing:1.5px;text-transform:uppercase;opacity:.8}
+                .bimar-role-card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+                .bimar-role-card{position:relative;min-height:142px;display:flex;align-items:center;gap:18px;padding:23px;border:1px solid rgba(148,163,184,.32);border-radius:21px;text-decoration:none!important;color:#172033!important;background:linear-gradient(145deg,rgba(255,255,255,.82),rgba(239,246,255,.55));backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 12px 32px rgba(15,23,42,.07);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+                .bimar-role-card:hover{transform:translateY(-4px);border-color:rgba(37,99,235,.4);box-shadow:0 18px 40px rgba(37,99,235,.13);color:#1d4ed8!important}
+                .bimar-role-card-icon{width:62px;height:62px;flex:0 0 62px;display:grid;place-items:center;border-radius:18px;background:rgba(37,99,235,.10);color:#2563eb}
+                .bimar-role-card-icon svg{width:31px;height:31px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+                .bimar-role-card-title{font-size:17px;font-weight:800;line-height:1.7}
+                .bimar-role-card-arrow{margin-right:auto;font-size:22px;color:#64748b}
+                @media(max-width:600px){#wpbody-content{padding:12px 10px 30px}.bimar-role-welcome{padding:22px 18px;border-radius:18px}.bimar-role-welcome h1{font-size:22px}.bimar-role-card-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.bimar-role-card{min-height:118px;padding:14px;gap:10px;flex-direction:column;align-items:flex-start;border-radius:16px}.bimar-role-card-icon{width:48px;height:48px;flex-basis:48px;border-radius:14px}.bimar-role-card-icon svg{width:25px;height:25px}.bimar-role-card-title{font-size:14px}.bimar-role-card-arrow{position:absolute;left:12px;bottom:12px}}
+                @media(prefers-color-scheme:dark){.bimar-role-card{color:#f1f5f9!important;background:linear-gradient(145deg,rgba(30,41,59,.9),rgba(15,23,42,.82));border-color:rgba(148,163,184,.2)}.bimar-role-card:hover{color:#93c5fd!important}}
+            ');
+            add_action('admin_footer', function () {
+                if (!in_array($this->current_role(), ['bimarstop_patient','bimarstop_doctor'], true)) return;
+                echo '<a href="'.esc_url(admin_url('admin.php?page=bimarstop-home')).'" class="bimar-role-home-link" style="position:fixed;z-index:99999;left:18px;top:48px;padding:9px 14px;border-radius:12px;background:#2563eb;color:#fff;text-decoration:none;font-weight:700;box-shadow:0 5px 18px rgba(37,99,235,.25)">⌂ داشبورد</a>';
+            });
+        }
     }
 
     public function admin_menu(): void {
         $role = $this->current_role();
 
-        // بیمار فقط چت با اپراتور و گزارش مشکل را می‌بیند.
         if ($role === 'bimarstop_patient') {
-            add_menu_page('بیمار استاپ', 'بیمار استاپ', 'read', 'bimarstop-chat', [$this, 'patient_chat_page'], 'dashicons-format-chat', 25);
-            add_submenu_page('bimarstop-chat', 'چت با اپراتور', 'چت با اپراتور', 'read', 'bimarstop-chat', [$this, 'patient_chat_page']);
-            add_submenu_page('bimarstop-chat', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
-            add_menu_page('مدارک', 'مدارک', 'read', 'bimarstop-patient-documents', [$this, 'personal_documents_page'], 'dashicons-portfolio', 26);
+            add_menu_page('داشبورد بیمار', 'داشبورد', 'read', 'bimarstop-home', [$this, 'role_dashboard'], 'dashicons-screenoptions', 3);
+            add_submenu_page('bimarstop-home', 'داشبورد', 'داشبورد', 'read', 'bimarstop-home', [$this, 'role_dashboard']);
+            add_submenu_page('bimarstop-home', 'چت با اپراتور', 'چت با اپراتور', 'read', 'bimarstop-chat', [$this, 'patient_chat_page']);
+            add_submenu_page('bimarstop-home', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
+            add_submenu_page('bimarstop-home', 'مدارک', 'مدارک', 'read', 'bimarstop-patient-documents', [$this, 'personal_documents_page']);
             return;
         }
 
         if ($role === 'bimarstop_doctor') {
-            add_menu_page('بیمار استاپ', 'بیمار استاپ', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page'], 'dashicons-format-chat', 25);
-            add_submenu_page('bimarstop-doctor-chats', 'چت با اپراتور', 'چت با اپراتور', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page']);
-            add_submenu_page('bimarstop-doctor-chats', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
-            add_submenu_page('bimarstop-doctor-chats', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'personal_documents_page']);
-            add_submenu_page('bimarstop-doctor-chats', '', '', 'read', 'bimarstop-patient-documents', [$this, 'personal_documents_page']);
+            add_menu_page('داشبورد پزشک', 'داشبورد', 'read', 'bimarstop-home', [$this, 'role_dashboard'], 'dashicons-screenoptions', 3);
+            add_submenu_page('bimarstop-home', 'داشبورد', 'داشبورد', 'read', 'bimarstop-home', [$this, 'role_dashboard']);
+            add_submenu_page('bimarstop-home', 'چت با اپراتور', 'چت با اپراتور', 'read', 'bimarstop-doctor-chats', [$this, 'doctor_private_chats_page']);
+            add_submenu_page('bimarstop-home', 'گزارش مشکل', 'گزارش مشکل', 'read', 'bimarstop-report-issue', [$this, 'report_issue_page']);
+            add_submenu_page('bimarstop-home', 'مدارک', 'مدارک', 'read', 'bimarstop-documents', [$this, 'personal_documents_page']);
             return;
         }
 
@@ -1876,7 +1891,37 @@ final class Plugin {
         wp_send_json_success(['redirect'=>admin_url()]);
     }
 
-    public function role_dashboard(): void { if (!current_user_can('read')) return; echo '<div class="wrap" dir="rtl"><h1>🏥 BimarStop</h1><p>داشبورد اختصاصی شما.</p></div>'; }
+    public function role_dashboard(): void {
+        if (!current_user_can('read')) return;
+        $role = $this->current_role();
+        if (!in_array($role, ['bimarstop_patient', 'bimarstop_doctor'], true)) return;
+        $parent = 'bimarstop-home';
+        global $submenu;
+        $items = $submenu[$parent] ?? [];
+        $manual = [
+            'bimarstop-chat' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-5 4v-4.3A2.5 2.5 0 0 1 4 13.5z"/><path d="M8 8h8M8 11h5"/></svg>',
+            'bimarstop-doctor-chats' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg>',
+            'bimarstop-report-issue' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5m0 3h.01"/></svg>',
+            'bimarstop-documents' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 12h6m-6 4h6"/></svg>',
+            'bimarstop-patient-documents' => '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 12h6m-6 4h6"/></svg>',
+        ];
+        echo '<div class="wrap bimar-role-dashboard" dir="rtl">';
+        echo '<header class="bimar-role-welcome"><span class="bimar-role-eyebrow">BimarStop</span><h1>'.($role === 'bimarstop_doctor' ? 'داشبورد پزشک' : 'داشبورد بیمار').'</h1><p>برای ورود به هر بخش، کارت مربوط به آن را انتخاب کنید.</p></header>';
+        echo '<div class="bimar-role-card-grid">';
+        $rendered = [];
+        foreach ($items as $item) {
+            $label = trim(wp_strip_all_tags($item[0] ?? ''));
+            $slug = (string)($item[2] ?? '');
+            if ($label === '' || $slug === '' || $slug === $parent || in_array($slug, $rendered, true)) continue;
+            if (!empty($item[1]) && !current_user_can($item[1])) continue;
+            $rendered[] = $slug;
+            $href = admin_url('admin.php?page=' . rawurlencode($slug));
+            $svg = $manual[$slug] ?? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v10m-5-5h10"/></svg>';
+            echo '<a class="bimar-role-card" href="'.esc_url($href).'"><span class="bimar-role-card-icon">'.$svg.'</span><span class="bimar-role-card-title">'.esc_html($label).'</span><span class="bimar-role-card-arrow" aria-hidden="true">←</span></a>';
+        }
+        if (!$rendered) echo '<p>در حال حاضر بخشی برای نمایش وجود ندارد.</p>';
+        echo '</div></div>';
+    }
 
     public function role_placeholder(): void { if (!current_user_can('read')) return; echo '<div class="wrap" dir="rtl"><h1>BimarStop</h1><p>این بخش در حال توسعه است.</p></div>'; }
 
