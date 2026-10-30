@@ -1763,61 +1763,89 @@ final class Plugin {
     }
 
     private function send_plain_otp(string $mobile): bool {
-        $settings=wp_parse_args(get_option('bimarstop_settings',[]),['sms_api_key'=>'','sms_line_number'=>'']);
-        if(empty($settings['sms_api_key'])||empty($settings['sms_line_number'])) return false;
-        if(get_transient('bimarstop_otp_rate_'.md5($mobile))) return false;
+        $settings = wp_parse_args(get_option('bimarstop_settings', []), [
+            'sms_api_key' => '',
+            'sms_line_number' => ''
+        ]);
 
-        $code=(string)wp_rand(100000,999999);
-        $otp_key='bimarstop_otp_'.md5($mobile);
-        $rate_key='bimarstop_otp_rate_'.md5($mobile);
+        if (empty($settings['sms_api_key']) || empty($settings['sms_line_number'])) {
+            error_log('[BimarStop SMS OTP] Configuration error: SMS.ir API key or sender line is empty.');
+            return false;
+        }
 
-        set_transient($otp_key,wp_hash($code.'|'.$mobile),5*MINUTE_IN_SECONDS);
+        $rate_key = 'bimarstop_otp_rate_' . md5($mobile);
+        if (get_transient($rate_key)) {
+            error_log('[BimarStop SMS OTP] Rate limit blocked a new OTP request.');
+            return false;
+        }
 
-        $response=wp_remote_post('https://api.sms.ir/v1/send/bulk',[
-            'timeout'=>15,
-            'headers'=>[
-                'Content-Type'=>'application/json',
-                'Accept'=>'application/json',
-                'X-API-KEY'=>$settings['sms_api_key']
+        $code = (string) wp_rand(100000, 999999);
+        $otp_key = 'bimarstop_otp_' . md5($mobile);
+
+        $response = wp_remote_post('https://api.sms.ir/v1/send/bulk', [
+            'timeout' => 20,
+            'redirection' => 2,
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+                'X-API-KEY' => $settings['sms_api_key']
             ],
-            'body'=>wp_json_encode([
-                'LineNumber'=>$settings['sms_line_number'],
-                'MessageText'=>"سلام، به بیماراستاپ خوش آمدید\nرمز شما: {$code} میباشد.\n#{$code}",
-                'Mobiles'=>[$mobile]
+            'body' => wp_json_encode([
+                'LineNumber' => $settings['sms_line_number'],
+                'MessageText' => "سلام، به بیماراستاپ خوش آمدید\nرمز شما: {$code} میباشد.\n#{$code}",
+                'Mobiles' => [$mobile]
             ])
         ]);
 
-        if(is_wp_error($response)) {
-            delete_transient($otp_key);
-            error_log('[BimarStop SMS] WP error: '.$response->get_error_message());
+        if (is_wp_error($response)) {
+            error_log('[BimarStop SMS OTP] WordPress HTTP error (' . $response->get_error_code() . '): ' . $response->get_error_message());
             return false;
         }
 
-        $status=wp_remote_retrieve_response_code($response);
-        $raw_body=wp_remote_retrieve_body($response);
-        $body=json_decode($raw_body,true);
+        $http_status = (int) wp_remote_retrieve_response_code($response);
+        $raw_body = (string) wp_remote_retrieve_body($response);
+        $api_body = json_decode($raw_body, true);
 
-        if($status<200||$status>=300) {
-            delete_transient($otp_key);
-            error_log('[BimarStop SMS] HTTP '.$status.' response: '.$raw_body);
+        if ($http_status < 200 || $http_status >= 300) {
+            error_log('[BimarStop SMS OTP] HTTP ' . $http_status . '; response: ' . $this->safe_sms_log_body($raw_body));
             return false;
         }
 
-        if(is_array($body)) {
-            if(isset($body['status']) && !$body['status']) {
-                delete_transient($otp_key);
-                error_log('[BimarStop SMS] API error: '.$raw_body);
-                return false;
-            }
-            if(isset($body['IsSuccessful']) && !$body['IsSuccessful']) {
-                delete_transient($otp_key);
-                error_log('[BimarStop SMS] API error: '.$raw_body);
-                return false;
-            }
+        if (!is_array($api_body)) {
+            error_log('[BimarStop SMS OTP] Invalid JSON response; HTTP ' . $http_status . '; response: ' . $this->safe_sms_log_body($raw_body));
+            return false;
         }
 
-        set_transient($rate_key,1,2 * MINUTE_IN_SECONDS);
+        $api_status = $api_body['status'] ?? ($api_body['IsSuccessful'] ?? null);
+        $api_message = sanitize_text_field((string) ($api_body['message'] ?? $api_body['Message'] ?? ''));
+        $success = true;
+
+        if (array_key_exists('status', $api_body)) {
+            $success = in_array($api_body['status'], [1, '1', true], true);
+        }
+        if (array_key_exists('IsSuccessful', $api_body) && !$api_body['IsSuccessful']) {
+            $success = false;
+        }
+
+        if (!$success) {
+            error_log('[BimarStop SMS OTP] SMS.ir rejected the request; HTTP ' . $http_status . '; API status: ' . wp_json_encode($api_status) . '; API message: ' . ($api_message !== '' ? $api_message : '(empty)') . '; response: ' . $this->safe_sms_log_body($raw_body));
+            return false;
+        }
+
+        set_transient($otp_key, wp_hash($code . '|' . $mobile), 5 * MINUTE_IN_SECONDS);
+        set_transient($rate_key, 1, 2 * MINUTE_IN_SECONDS);
+        error_log('[BimarStop SMS OTP] SMS.ir accepted the OTP request; HTTP ' . $http_status . '; API status: ' . wp_json_encode($api_status) . '; message: ' . ($api_message !== '' ? $api_message : '(none)'));
+
         return true;
+    }
+
+    /**
+     * Keep SMS provider diagnostics useful without writing API keys, OTPs, or phone numbers to logs.
+     */
+    private function safe_sms_log_body(string $body): string {
+        $body = preg_replace('/09\\d{9}/', '[mobile-redacted]', $body);
+        $body = preg_replace('/(?<!\\d)\\d{6}(?!\\d)/', '[code-redacted]', $body);
+        return substr((string) $body, 0, 2000);
     }
 
     public function admin_new_user_mobile_field($form_type): void {
