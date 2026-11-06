@@ -129,8 +129,9 @@ final class DocumentManager {
         $page = sanitize_key($_GET['page'] ?? '');
         if (!in_array($page, ['bimarstop-documents', 'bimarstop-patient-documents'], true)) return;
 
+        wp_enqueue_script('jquery');
         wp_add_inline_style('bimarstop-admin-font', $this->css());
-        wp_add_inline_script('jquery-core', $this->js());
+        wp_add_inline_script('jquery', $this->js(), 'after');
     }
 
     private function css(): string {
@@ -278,11 +279,32 @@ CSS;
         $files = $_FILES['files'];
         $count = is_array($files['name']) ? count($files['name']) : 0;
         $uploaded = 0;
+        $errors = [];
 
         for ($i=0; $i<$count; $i++) {
-            if ((int)$files['error'][$i] !== UPLOAD_ERR_OK) continue;
-            if ((int)$files['size'][$i] > 10 * 1024 * 1024) continue;
-            if (!$this->allowed_extension($files['name'][$i])) continue;
+            $originalName = sanitize_file_name(wp_unslash($files['name'][$i] ?? 'فایل'));
+            $uploadError = (int)($files['error'][$i] ?? UPLOAD_ERR_NO_FILE);
+            if ($uploadError !== UPLOAD_ERR_OK) {
+                $messages = [
+                    UPLOAD_ERR_INI_SIZE => 'حجم فایل از محدودیت سرور بیشتر است.',
+                    UPLOAD_ERR_FORM_SIZE => 'حجم فایل از محدودیت فرم بیشتر است.',
+                    UPLOAD_ERR_PARTIAL => 'فایل ناقص ارسال شده است.',
+                    UPLOAD_ERR_NO_FILE => 'فایلی انتخاب نشده است.',
+                    UPLOAD_ERR_NO_TMP_DIR => 'پوشه موقت آپلود روی سرور وجود ندارد.',
+                    UPLOAD_ERR_CANT_WRITE => 'سرور نتوانست فایل را روی دیسک ذخیره کند.',
+                    UPLOAD_ERR_EXTENSION => 'یکی از افزونه‌های PHP آپلود را متوقف کرده است.'
+                ];
+                $errors[] = $originalName . ': ' . ($messages[$uploadError] ?? 'خطای ناشناخته هنگام آپلود.');
+                continue;
+            }
+            if ((int)$files['size'][$i] > 10 * 1024 * 1024) {
+                $errors[] = $originalName . ': حداکثر حجم مجاز هر فایل ۱۰ مگابایت است.';
+                continue;
+            }
+            if (!$this->allowed_extension($originalName)) {
+                $errors[] = $originalName . ': پسوند این فایل مجاز نیست.';
+                continue;
+            }
 
             $one = [
                 'name' => $files['name'][$i],
@@ -293,14 +315,20 @@ CSS;
             ];
 
             $check = wp_check_filetype_and_ext($one['tmp_name'], $one['name'], $allowed);
-            if (empty($check['ext']) || !isset($allowed[$check['ext']])) continue;
+            if (empty($check['ext']) || !isset($allowed[$check['ext']])) {
+                $errors[] = $originalName . ': نوع واقعی فایل با پسوند آن مطابقت ندارد یا قابل تشخیص نیست.';
+                continue;
+            }
 
             $up = wp_handle_upload($one, ['test_form' => false, 'mimes' => $allowed]);
-            if (isset($up['error'])) continue;
+            if (isset($up['error'])) {
+                $errors[] = $originalName . ': ' . sanitize_text_field($up['error']);
+                continue;
+            }
 
             $name = sanitize_file_name($one['name']);
             $now = current_time('mysql');
-            $wpdb->insert($wpdb->prefix.'bimarstop_personal_docs', [
+            $inserted = $wpdb->insert($wpdb->prefix.'bimarstop_personal_docs', [
                 'owner_user_id' => (int)$folder->owner_user_id,
                 'owner_role' => $folder->owner_role,
                 'folder_id' => $folderId,
@@ -315,11 +343,24 @@ CSS;
                 'updated_at' => $now
             ], ['%d','%s','%d','%s','%s','%s','%d','%s','%d','%d','%s','%s']);
 
+            if ($inserted === false) {
+                @unlink($up['file']);
+                $errors[] = $originalName . ': ثبت اطلاعات فایل در پایگاه داده ناموفق بود.';
+                continue;
+            }
             $uploaded++;
         }
 
-        if (!$uploaded) wp_send_json_error(['message' => 'هیچ فایل مجازی آپلود نشد.']);
-        wp_send_json_success(['uploaded' => $uploaded]);
+        if (!$uploaded) {
+            wp_send_json_error([
+                'message' => 'آپلود انجام نشد.',
+                'errors' => $errors ?: ['فایلی برای آپلود دریافت نشد.']
+            ]);
+        }
+        wp_send_json_success([
+            'uploaded' => $uploaded,
+            'errors' => $errors
+        ]);
     }
 
     public function ajax_copy_main(): void {
