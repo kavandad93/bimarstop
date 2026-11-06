@@ -751,7 +751,7 @@ final class Plugin {
         echo '<aside class="bimar-chat-side"><div class="bimar-chat-side-title">گفت‌وگوی شما</div><div class="bimar-chat-tab active">💬 پشتیبانی</div><div class="bimar-chat-side-info">🔒 این گفتگو خصوصی است<br><span>فایل‌های PDF، JPG، PNG و DOCX تا ۱۰ مگابایت قابل ارسال‌اند.</span></div></aside>';
         echo '<main class="bimar-chat-main"><div id="bimarstop-chat-box" class="bimar-chat-box"><div class="bimar-chat-welcome"><div class="bimar-chat-welcome-icon">💙</div><h2>سلام! چطور می‌توانیم کمکتان کنیم؟</h2><p>پیامتان را بنویسید. اگر لازم است، مدارک را هم با 📎 پیوست کنید.</p></div></div>';
         echo '<div id="bimar-chat-attachment" class="bimar-chat-attachment" hidden><span>📎 <b id="bimar-file-name"></b></span><button type="button" id="bimar-file-remove">×</button></div>';
-        echo '<div class="bimar-chat-composer"><label class="bimar-attach"><input id="bimarstop-chat-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden>📎</label>'.($this->can_use_documents() ? '<select id="bimarstop-chat-document" title="انتخاب مدرک موجود"><option value="">📚 مدرک موجود</option></select>' : '').'<textarea id="bimarstop-chat-input" rows="1" placeholder="پیام خود را بنویسید..."></textarea><button id="bimarstop-send" class="bimar-send">➤</button><div class="bimar-chat-hint">Enter برای ارسال • Shift+Enter برای خط جدید</div></div></main></div></div>';
+        echo '<div class="bimar-chat-composer"><label class="bimar-attach" for="bimarstop-chat-document">📎</label><select id="bimarstop-chat-document" title="انتخاب از مدارک آپلودشده"><option value="">📚 انتخاب مدرک آپلودشده</option></select>'.($this->can_use_documents() ? '<select id="bimarstop-chat-document" title="انتخاب مدرک موجود"><option value="">📚 مدرک موجود</option></select>' : '').'<textarea id="bimarstop-chat-input" rows="1" placeholder="پیام خود را بنویسید..."></textarea><button id="bimarstop-send" class="bimar-send">➤</button><div class="bimar-chat-hint">Enter برای ارسال • Shift+Enter برای خط جدید</div></div></main></div></div>';
         $this->chat_script();
     }
 
@@ -767,7 +767,7 @@ final class Plugin {
         echo '<div class="bimar-chat-header"><div><span class="bimar-chat-kicker">BimarStop • پشتیبانی</span><h1>💬 گفت‌وگو با بیمار</h1><p>'.($thread ? 'در حال پاسخ‌گویی به '.esc_html($thread->display_name) : 'یک گفتگو را از صف چت انتخاب کنید.').'</p></div><a class="bimar-chat-back" href="'.esc_url(admin_url('admin.php?page=bimarstop-queue')).'">← صف گفتگوها</a></div>';
         if (!$thread) { echo '<div class="bimar-chat-empty">یک گفتگو را از «صف ورودی» انتخاب کنید.</div></div>'; return; }
         echo '<div class="bimar-chat-shell"><aside class="bimar-chat-side"><div class="bimar-chat-side-title">مکالمه فعال</div><div class="bimar-chat-tab active">🧑 '.esc_html($thread->display_name).'</div><div class="bimar-chat-side-info">📎 ارسال فایل فعال است<br><span>فایل‌های PDF، JPG، PNG و DOCX تا ۱۰ مگابایت.</span></div></aside>';
-        echo '<main class="bimar-chat-main"><div id="bimarstop-chat-box" class="bimar-chat-box"></div><div id="bimar-chat-attachment" class="bimar-chat-attachment" hidden><span>📎 <b id="bimar-file-name"></b></span><button type="button" id="bimar-file-remove">×</button></div><div class="bimar-chat-composer"><label class="bimar-attach"><input id="bimarstop-chat-file" type="file" accept=".pdf,.jpg,.jpeg,.png,.webp,.doc,.docx" hidden>📎</label><textarea id="bimarstop-chat-input" rows="1" placeholder="پاسخ خود را بنویسید..."></textarea><button id="bimarstop-send" class="bimar-send">➤</button><div class="bimar-chat-hint">Enter برای ارسال • Shift+Enter برای خط جدید</div></div></main></div></div>';
+        echo '<main class="bimar-chat-main"><div id="bimarstop-chat-box" class="bimar-chat-box"></div><div id="bimar-chat-attachment" class="bimar-chat-attachment" hidden><span>📎 <b id="bimar-file-name"></b></span><button type="button" id="bimar-file-remove">×</button></div><div class="bimar-chat-composer"><label class="bimar-attach" for="bimarstop-chat-document">📎</label><select id="bimarstop-chat-document" data-thread-id="' . (int)$thread->id . '" title="انتخاب از مدارک بیمار"><option value="">📚 انتخاب مدرک آپلودشده</option></select><textarea id="bimarstop-chat-input" rows="1" placeholder="پاسخ خود را بنویسید..."></textarea><button id="bimarstop-send" class="bimar-send">➤</button><div class="bimar-chat-hint">Enter برای ارسال • Shift+Enter برای خط جدید</div></div></main></div></div>';
         $this->chat_script();
     }
 
@@ -789,10 +789,8 @@ final class Plugin {
             if(window.__bimarstopChatInitialized)return;
             window.__bimarstopChatInitialized=true;
             var box=document.getElementById("bimarstop-chat-box"), input=document.getElementById("bimarstop-chat-input"),
-                send=document.getElementById("bimarstop-send"), file=document.getElementById("bimarstop-chat-file"),
-                attachment=document.getElementById("bimar-chat-attachment"), fileName=document.getElementById("bimar-file-name"),
-                docSelect=document.getElementById("bimarstop-chat-document"),
-                remove=document.getElementById("bimar-file-remove"), last=0, loading=false, seen={}, sent={};
+                send=document.getElementById("bimarstop-send"),
+                docSelect=document.getElementById("bimarstop-chat-document"), last=0, loading=false, seen={}, sent={};
             if(!box||!input||!send)return;
             function esc(t){var d=document.createElement("div");d.textContent=t;return d.innerHTML;}
             function render(m){
@@ -818,23 +816,20 @@ final class Plugin {
                     if(x.data.messages.length)box.scrollTop=box.scrollHeight;
                 }).catch(function(){}).finally(function(){loading=false;});
             }
-            function clearFile(){file.value="";attachment.hidden=true;fileName.textContent="";}
-            file.addEventListener("change",function(){if(this.files[0]){fileName.textContent=this.files[0].name;attachment.hidden=false;}});
-            remove.addEventListener("click",clearFile);
             function sendMessage(){
                 var value=input.value.trim();
-                if(!value && !file.files.length)return;
+                if(!value && (!docSelect||!docSelect.value))return;
                 var f=new FormData();f.append("action","bimarstop_send_message");f.append("nonce","'.esc_js($nonce).'");f.append("message",value);
-                if(file.files[0])f.append("chat_file",file.files[0]); if(docSelect&&docSelect.value)f.append("document_id",docSelect.value);
+                if(docSelect&&docSelect.value)f.append("document_id",docSelect.value);
                 send.disabled=true;send.classList.add("loading");
                 fetch("'.esc_url($ajax).'",{method:"POST",body:f}).then(r=>r.json()).then(function(x){
                     send.disabled=false;send.classList.remove("loading");
-                    if(x.success){input.value="";clearFile();load();}else{alert((x.data&&x.data.message)?x.data.message:"ارسال پیام ناموفق بود.");}
+                    if(x.success){input.value="";if(docSelect)docSelect.value="";load();}else{alert((x.data&&x.data.message)?x.data.message:"ارسال پیام ناموفق بود.");}
                 }).catch(function(){send.disabled=false;send.classList.remove("loading");alert("خطا در ارتباط با سرور.");});
             }
             send.onclick=sendMessage;
             input.addEventListener("keydown",function(e){if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();sendMessage();}});
-            if(docSelect){var df=new FormData();df.append("action","bimarstop_get_documents");df.append("nonce","'.esc_js($nonce).'");fetch("'.esc_url($ajax).'",{method:"POST",body:df}).then(r=>r.json()).then(function(x){if(x.success)x.data.documents.forEach(function(d){var o=document.createElement("option");o.value=d.id;o.textContent="📎 "+d.name+" — "+d.category+" — "+d.size;docSelect.appendChild(o);});});} load();setInterval(load,1000);
+            if(docSelect){var df=new FormData();df.append("action","bimarstop_get_documents");df.append("nonce","'.esc_js($nonce).'");if(docSelect.dataset.threadId)df.append("thread_id",docSelect.dataset.threadId);fetch("'.esc_url($ajax).'",{method:"POST",body:df}).then(r=>r.json()).then(function(x){if(x.success)x.data.documents.forEach(function(d){var o=document.createElement("option");o.value=d.id;o.textContent="📎 "+d.name+" — "+d.category+" — "+d.size;docSelect.appendChild(o);});else{var o=document.createElement("option");o.textContent=x.data&&x.data.message?x.data.message:"مدرکی پیدا نشد";o.disabled=true;docSelect.appendChild(o);}}).catch(function(){var o=document.createElement("option");o.textContent="بارگذاری فهرست مدارک ناموفق بود";o.disabled=true;docSelect.appendChild(o);});} load();setInterval(load,1000);
         })();
         </script>';
     }
