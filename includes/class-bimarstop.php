@@ -476,7 +476,7 @@ final class Plugin {
     }
 
     private function can_use_documents(): bool {
-        return $this->current_role() === 'bimarstop_operator';
+        return in_array($this->current_role(), ['bimarstop_patient','bimarstop_operator'], true);
     }
 
     private function themes(): array {
@@ -868,11 +868,17 @@ final class Plugin {
         if($this->current_role()==='bimarstop_operator' && (int)$thread->operator_id===0)$wpdb->update($tname,['operator_id'=>$uid,'updated_at'=>current_time('mysql')],['id'=>$thread->id],['%d','%s'],['%d']);
 
         $path='';$name='';$size=0;$type='';
-        if(empty($_FILES['chat_file']) && !empty($_POST['document_id']) && $this->can_use_documents()){
-            $did=absint($_POST['document_id']); global $wpdb;
-            $doc=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_documents WHERE id=%d",$did));
-            $uploads=wp_upload_dir(); $real=$doc?realpath($doc->path):false; $base=!empty($uploads['basedir'])?realpath($uploads['basedir']):false;
-            if($doc&&$real&&$base&&strpos($real,$base)===0&&is_file($real)){ $path=$real; $name=$doc->name; $size=(int)$doc->size; $type=$doc->type; }
+        if(!empty($_POST['document_id'])){
+            $did=absint($_POST['document_id']);
+            $doc=$wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_personal_docs WHERE id=%d",$did));
+            $expectedOwner=$this->current_role()==='bimarstop_operator'?(int)$thread->patient_id:get_current_user_id();
+            $uploads=wp_upload_dir();
+            $real=$doc?realpath($doc->path):false;
+            $base=!empty($uploads['basedir'])?realpath($uploads['basedir']):false;
+            if(!$doc || (int)$doc->owner_user_id!==$expectedOwner || $doc->owner_role!=='bimarstop_patient' || !$real || !$base || !is_file($real) || ($real!==$base && strpos($real,$base.DIRECTORY_SEPARATOR)!==0)){
+                wp_send_json_error(['message'=>'مدرک انتخاب‌شده معتبر نیست یا به این گفتگو تعلق ندارد.']);
+            }
+            $path=$real;$name=$doc->name;$size=(int)$doc->size;$type=$doc->type;
         }
         if(!empty($_FILES['chat_file']) && is_array($_FILES['chat_file'])){
             if((int)$_FILES['chat_file']['size']>10*1024*1024) wp_send_json_error(['message'=>'حداکثر حجم فایل ۱۰ مگابایت است.']);
@@ -1357,9 +1363,29 @@ final class Plugin {
     public function ajax_get_documents(): void {
         check_ajax_referer('bimarstop_chat','nonce');
         if(!$this->can_use_documents()) wp_send_json_error(['message'=>'دسترسی ندارید.']);
-        global $wpdb; $this->sync_documents();
-        $rows=$wpdb->get_results("SELECT d.id,d.name,d.size,d.type,c.name AS category_name FROM {$wpdb->prefix}bimarstop_documents d LEFT JOIN {$wpdb->prefix}bimarstop_document_categories c ON c.id=d.category_id WHERE d.hidden=0 ORDER BY c.name ASC,d.name ASC");
-        $out=[]; foreach($rows as $r)$out[]=['id'=>(int)$r->id,'name'=>$r->name,'size'=>size_format((int)$r->size),'category'=>$r->category_name?:'عمومی'];
+        global $wpdb;
+        $owner=get_current_user_id();
+        if($this->current_role()==='bimarstop_operator'){
+            $threadId=absint($_POST['thread_id']??0);
+            $thread=$threadId ? $wpdb->get_row($wpdb->prepare("SELECT * FROM {$wpdb->prefix}bimarstop_chat_threads WHERE id=%d",$threadId)) : null;
+            if(!$thread || !$this->chat_user_can_access((int)$thread->id,get_current_user_id())) wp_send_json_error(['message'=>'گفتگوی معتبر پیدا نشد.']);
+            $owner=(int)$thread->patient_id;
+        }
+        $rows=$wpdb->get_results($wpdb->prepare(
+            "SELECT d.id,d.name,d.size,d.type,COALESCE(f.name,'پوشه اصلی') AS category_name
+             FROM {$wpdb->prefix}bimarstop_personal_docs d
+             LEFT JOIN {$wpdb->prefix}bimarstop_personal_doc_folders f ON f.id=d.folder_id
+             WHERE d.owner_user_id=%d AND d.owner_role='bimarstop_patient'
+             AND (f.is_hidden IS NULL OR f.is_hidden=0)
+             ORDER BY category_name ASC,d.name ASC",
+            $owner
+        ));
+        $out=[];
+        foreach($rows as $row){
+            $path=$wpdb->get_var($wpdb->prepare("SELECT path FROM {$wpdb->prefix}bimarstop_personal_docs WHERE id=%d",$row->id));
+            if(!$path || !is_file($path)) continue;
+            $out[]=['id'=>(int)$row->id,'name'=>$row->name,'size'=>size_format((int)$row->size),'category'=>$row->category_name?:'پوشه اصلی'];
+        }
         wp_send_json_success(['documents'=>$out]);
     }
 
