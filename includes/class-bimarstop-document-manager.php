@@ -267,7 +267,14 @@ CSS;
         if (!$folder || !$this->can_edit_owner((int)$folder->owner_user_id, $folder->owner_role)) {
             wp_send_json_error(['message' => 'آپلود در این پوشه مجاز نیست.']);
         }
-        if (empty($_FILES['files'])) wp_send_json_error(['message' => 'فایلی انتخاب نشده است.']);
+        if (empty($_FILES['files'])) {
+            $postMax = (string) ini_get('post_max_size');
+            $contentLength = (int) ($_SERVER['CONTENT_LENGTH'] ?? 0);
+            if ($contentLength > 0) {
+                wp_send_json_error(['message' => 'سرور هیچ فایلی دریافت نکرد. احتمالاً محدودیت post_max_size در PHP کمتر از حجم ارسالی است. مقدار فعلی: ' . $postMax]);
+            }
+            wp_send_json_error(['message' => 'فایلی انتخاب نشده است یا مرورگر آن را ارسال نکرده است.']);
+        }
 
         require_once ABSPATH . 'wp-admin/includes/file.php';
         $allowed = [
